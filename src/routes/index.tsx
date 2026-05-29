@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
-import { useMemo, useRef, useState } from "react";
+import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { FoodCard } from "@/components/site/FoodCard";
@@ -20,6 +20,79 @@ export const Route = createFileRoute("/")({
 
 type Sort = "popular" | "price-low" | "price-high" | "rating";
 
+function HeroSection() {
+  const scrollY = useMotionValue(0);
+  const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
+  const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
+
+  useEffect(() => {
+    const onScroll = () => scrollY.set(window.scrollY);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [scrollY]);
+
+  return (
+    <section className="relative overflow-hidden">
+      <div className="absolute inset-0 gradient-hero" aria-hidden />
+      <motion.div
+        style={{ y: heroY, scale: heroScale }}
+        className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-2 md:px-6 md:py-24"
+      >
+        <div>
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> Hotel-quality. Delivered in 30 min.
+          </motion.div>
+          <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-5 text-4xl font-black leading-[1.05] md:text-7xl">
+            Crave it. <br />
+            <span className="text-gradient">Tap it.</span> Devour it.
+          </motion.h1>
+          <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="mt-5 max-w-md text-lg text-muted-foreground">
+            Welcome to SAM — one hotel, a hundred reasons to stay hungry. From slow-dum biryani to event-scale catering, we deliver the moment you call.
+          </motion.p>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-7 flex flex-wrap items-center gap-3">
+            <a href="#menu" className="inline-flex items-center gap-2 rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-105">
+              <Flame className="h-4 w-4" /> Order Now
+            </a>
+            <Link to="/bulk-order" className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 px-6 py-3 font-semibold backdrop-blur transition hover:bg-accent">
+              <UtensilsCrossed className="h-4 w-4" /> Bulk Booking <ArrowRight className="h-4 w-4" />
+            </Link>
+          </motion.div>
+          <div className="mt-8 flex items-center gap-6 text-sm text-muted-foreground">
+            <div><div className="text-2xl font-bold text-foreground">4.8★</div>12k+ ratings</div>
+            <div><div className="text-2xl font-bold text-foreground">30 min</div>avg delivery</div>
+            <div><div className="text-2xl font-bold text-foreground">120+</div>signature dishes</div>
+          </div>
+        </div>
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }} className="relative">
+          <motion.img
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            src="https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80"
+            alt="SAM signature biryani"
+            className="aspect-square w-full rounded-[2rem] object-cover shadow-elegant"
+          />
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4 }}
+            className="absolute -left-4 bottom-10 hidden rounded-2xl border border-border bg-card p-3 shadow-elegant md:block"
+          >
+            <div className="flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-full gradient-primary text-primary-foreground">
+                <Star className="h-4 w-4 fill-current" />
+              </span>
+              <div>
+                <div className="text-xs text-muted-foreground">Bestseller</div>
+                <div className="text-sm font-bold">SAM Special Biryani</div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      </motion.div>
+    </section>
+  );
+}
+
 function Index() {
   const [cat, setCat] = useState<Category | "All">("All");
   const [q, setQ] = useState("");
@@ -34,13 +107,9 @@ function Index() {
     return arr;
   }, [cat, q, sort]);
 
-  const heroRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const reviewRef = useRef<HTMLDivElement>(null);
   const { reviews, loading: reviewsLoading, submitReview } = useReviews();
   const { user } = useAuth();
 
-  // Review form state
   const [hoverStar, setHoverStar] = useState(0);
   const [formRating, setFormRating] = useState(0);
   const [formText, setFormText] = useState("");
@@ -73,72 +142,12 @@ function Index() {
     ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
     : null;
 
-  const { scrollYProgress: heroScroll } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const heroY = useSpring(useTransform(heroScroll, [0, 1], [0, 40]), { stiffness: 80, damping: 20 });
-  const heroScale = useTransform(heroScroll, [0, 1], [1, 0.96]);
-
   return (
     <SiteShell>
-      {/* HERO */}
-      <section ref={heroRef} className="relative overflow-hidden">
-        <div className="absolute inset-0 gradient-hero" aria-hidden />
-        <motion.div
-          style={{ y: heroY, scale: heroScale }}
-          className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-2 md:px-6 md:py-24"
-        >
-          <div>
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-primary" /> Hotel-quality. Delivered in 30 min.
-            </motion.div>
-            <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-5 text-4xl font-black leading-[1.05] md:text-7xl">
-              Crave it. <br />
-              <span className="text-gradient">Tap it.</span> Devour it.
-            </motion.h1>
-            <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="mt-5 max-w-md text-lg text-muted-foreground">
-              Welcome to SAM — one hotel, a hundred reasons to stay hungry. From slow-dum biryani to event-scale catering, we deliver the moment you call.
-            </motion.p>
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-7 flex flex-wrap items-center gap-3">
-              <a href="#menu" className="inline-flex items-center gap-2 rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-105">
-                <Flame className="h-4 w-4" /> Order Now
-              </a>
-              <Link to="/bulk-order" className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 px-6 py-3 font-semibold backdrop-blur transition hover:bg-accent">
-                <UtensilsCrossed className="h-4 w-4" /> Bulk Booking <ArrowRight className="h-4 w-4" />
-              </Link>
-            </motion.div>
-            <div className="mt-8 flex items-center gap-6 text-sm text-muted-foreground">
-              <div><div className="text-2xl font-bold text-foreground">4.8★</div>12k+ ratings</div>
-              <div><div className="text-2xl font-bold text-foreground">30 min</div>avg delivery</div>
-              <div><div className="text-2xl font-bold text-foreground">120+</div>signature dishes</div>
-            </div>
-          </div>
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }} className="relative">
-            <motion.img
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-              src="https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80"
-              alt="SAM signature biryani"
-              className="aspect-square w-full rounded-[2rem] object-cover shadow-elegant"
-            />
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-              className="absolute -left-4 bottom-10 hidden rounded-2xl border border-border bg-card p-3 shadow-elegant md:block"
-            >
-              <div className="flex items-center gap-2">
-                <span className="grid h-9 w-9 place-items-center rounded-full gradient-primary text-primary-foreground"><Star className="h-4 w-4 fill-current" /></span>
-                <div>
-                  <div className="text-xs text-muted-foreground">Bestseller</div>
-                  <div className="text-sm font-bold">SAM Special Biryani</div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        </motion.div>
-      </section>
+      <HeroSection />
 
       {/* MENU */}
-      <section ref={menuRef} id="menu" className="mx-auto max-w-7xl scroll-mt-20 overflow-hidden px-4 py-12 md:px-6">
+      <section id="menu" className="mx-auto max-w-7xl scroll-mt-20 overflow-hidden px-4 py-12 md:px-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">The Menu</div>
@@ -195,7 +204,7 @@ function Index() {
       </section>
 
       {/* REVIEWS */}
-      <section ref={reviewRef} className="mx-auto max-w-7xl px-4 py-16 md:px-6">
+      <section className="mx-auto max-w-7xl px-4 py-16 md:px-6">
         <div className="text-center">
           <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">Loved by our regulars</div>
           <motion.h2
@@ -221,7 +230,6 @@ function Index() {
           )}
         </div>
 
-        {/* Write a review */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -234,45 +242,34 @@ function Index() {
           </div>
           {user ? (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Star picker */}
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your rating</div>
                 <div className="flex gap-1">
                   {[1,2,3,4,5].map(s => (
-                    <button
-                      key={s}
-                      type="button"
+                    <button key={s} type="button"
                       onMouseEnter={() => setHoverStar(s)}
                       onMouseLeave={() => setHoverStar(0)}
                       onClick={() => setFormRating(s)}
                       className="transition hover:scale-125"
                     >
-                      <Star className={`h-7 w-7 transition ${
-                        (hoverStar || formRating) >= s
-                          ? "fill-primary text-primary"
-                          : "text-border"
-                      }`} />
+                      <Star className={`h-7 w-7 transition ${(hoverStar || formRating) >= s ? "fill-primary text-primary" : "text-border"}`} />
                     </button>
                   ))}
                 </div>
               </div>
-              {/* Role */}
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">You are a</div>
                 <div className="flex flex-wrap gap-2">
                   {["Customer", "Regular", "Event Host", "Office Order"].map(r => (
                     <button key={r} type="button" onClick={() => setFormRole(r)}
                       className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                        formRole === r
-                          ? "gradient-primary border-transparent text-primary-foreground"
-                          : "border-border bg-background hover:bg-accent"
+                        formRole === r ? "gradient-primary border-transparent text-primary-foreground" : "border-border bg-background hover:bg-accent"
                       }`}>
                       {r}
                     </button>
                   ))}
                 </div>
               </div>
-              {/* Text */}
               <textarea
                 value={formText}
                 onChange={e => setFormText(e.target.value)}
@@ -296,7 +293,6 @@ function Index() {
           )}
         </motion.div>
 
-        {/* Reviews grid */}
         <div className="mt-10">
           {reviewsLoading ? (
             <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -326,7 +322,7 @@ function Index() {
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Your review</span>
                       )}
                     </div>
-                    <p className="mt-3 text-foreground/90">“{r.text}”</p>
+                    <p className="mt-3 text-foreground/90">"{r.text}"</p>
                     <footer className="mt-4 flex items-center justify-between text-sm">
                       <div>
                         <span className="font-semibold">{r.name}</span>

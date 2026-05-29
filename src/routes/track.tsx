@@ -63,11 +63,11 @@ function TrackPage() {
     const load = async () => {
       setLoading(true);
       if (orderId) {
-        const { data } = await supabase.from("orders").select("*").eq("id", orderId).single();
-        if (data) setOrder({ ...data, items: data.items as unknown as CartItem[] });
+        const { data } = await (supabase.from("orders") as any).select("*").eq("id", orderId).single();
+        if (data) setOrder({ ...(data as any), items: (data as any).items as unknown as CartItem[] });
       } else if (myOrders.length > 0) {
-        const o = myOrders[0];
-        setOrder(o as typeof order);
+        const o = myOrders[0] as any;
+        setOrder(o);
       }
       setLoading(false);
     };

@@ -55,7 +55,7 @@ function BulkOrderPage() {
         menuTypes.length ? `Menu type: ${menuTypes.join(", ")}` : "",
         f.menu,
       ].filter(Boolean).join(" | ");
-      const { error } = await supabase.from("bulk_orders").insert({
+      const { error } = await (supabase.from("bulk_orders") as any).insert({
         name: f.name, phone: f.phone, event: f.event,
         people: parseInt(f.people, 10), date: f.date, location: f.location,
         menu_request: menuRequest || null, budget: f.budget, status: "Pending",

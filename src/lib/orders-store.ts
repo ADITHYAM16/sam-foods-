@@ -100,15 +100,15 @@ export function useOrders(): Order[] {
   const [list, setList] = useState<Order[]>([]);
 
   useEffect(() => {
-    const fetchOrders = () =>
-      supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .then(({ data, error }) => {
-          if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-        })
-        .catch(() => {});
+    const fetchOrders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
+      } catch { /* table may not exist */ }
+    };
 
     fetchOrders();
 
@@ -129,16 +129,16 @@ export function useMyOrders(userId: string | null | undefined): Order[] {
   useEffect(() => {
     if (!userId) return;
 
-    const fetchMyOrders = () =>
-      supabase
-        .from("orders")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .then(({ data, error }) => {
-          if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-        })
-        .catch(() => {});
+    const fetchMyOrders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
+      } catch { /* table may not exist */ }
+    };
 
     fetchMyOrders();
 
