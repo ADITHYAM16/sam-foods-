@@ -16,10 +16,10 @@ export function useReviews() {
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
-    const { data } = await (supabase.from("reviews") as any)
+    const { data, error } = await (supabase.from("reviews") as any)
       .select("*")
       .order("created_at", { ascending: false });
-    setReviews((data as Review[]) ?? []);
+    if (!error) setReviews((data as Review[]) ?? []);
     setLoading(false);
   }, []);
 
