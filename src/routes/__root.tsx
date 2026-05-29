@@ -7,10 +7,13 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
+import { LocationProvider } from "@/lib/location-context";
 
 function NotFoundComponent() {
   return (
@@ -116,15 +119,140 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+const CIRC = 2 * Math.PI * 62;
+
+function SplashScreen({ onDone }: { onDone: () => void }) {
+  const [phase, setPhase] = useState<"intro" | "main">("intro");
+
+  useEffect(() => {
+    // intro ripple plays for 750ms, then switch to main
+    const t1 = setTimeout(() => setPhase("main"), 750);
+    // total duration: 750 intro + 2800 main
+    const t2 = setTimeout(onDone, 750 + 2800);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [onDone]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 1.05 }}
+      transition={{ duration: 0.6, ease: "easeInOut" }}
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background overflow-hidden"
+    >
+      {/* ── Intro ripple transition ── */}
+      <AnimatePresence>
+        {phase === "intro" && (
+          <motion.div
+            key="ripple"
+            initial={{ scale: 0, opacity: 1 }}
+            animate={{ scale: 6, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute rounded-full"
+            style={{
+              width: 220,
+              height: 220,
+              background: "var(--gradient-primary)",
+              willChange: "transform, opacity",
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Main splash (visible after intro) ── */}
+      {phase === "main" && (
+        <>
+          {/* Logo + circular spinner */}
+          <div className="relative flex items-center justify-center">
+            <svg
+              className="absolute"
+              width="136"
+              height="136"
+              viewBox="0 0 136 136"
+              style={{ transform: "rotate(-90deg)", willChange: "transform" }}
+            >
+              <circle cx="68" cy="68" r="62" fill="none" stroke="var(--border)" strokeWidth="3" />
+              <motion.circle
+                cx="68" cy="68" r="62"
+                fill="none"
+                stroke="url(#splashGrad)"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={CIRC}
+                initial={{ strokeDashoffset: CIRC }}
+                animate={{ strokeDashoffset: 0 }}
+                transition={{ delay: 1.2, duration: 1.3, ease: "easeInOut" }}
+              />
+              <defs>
+                <linearGradient id="splashGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="oklch(0.68 0.22 32)" />
+                  <stop offset="100%" stopColor="oklch(0.78 0.18 55)" />
+                </linearGradient>
+              </defs>
+            </svg>
+
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
+              className="relative h-28 w-28 rounded-full bg-white shadow-glow overflow-hidden border-4 border-primary/20"
+              style={{ willChange: "transform" }}
+            >
+              <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-full w-full object-cover" />
+            </motion.div>
+          </div>
+
+          {/* Brand name */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+            className="mt-6 text-center"
+            style={{ willChange: "opacity, transform" }}
+          >
+            <div className="font-[Fraunces] text-4xl font-black tracking-tight">
+              SAM <span className="text-gradient">Foods</span>
+            </div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1, duration: 0.5 }}
+              className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground"
+            >
+              Hotel Kitchen · Delivered
+            </motion.div>
+          </motion.div>
+
+          {/* Tagline */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5, duration: 0.5 }}
+            className="mt-6 text-xs text-muted-foreground"
+          >
+            Crave it. Tap it. Devour it.
+          </motion.p>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [splash, setSplash] = useState(true);
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <CartProvider>
-          <Outlet />
-        </CartProvider>
+        <LocationProvider>
+          <CartProvider>
+            <AnimatePresence mode="wait">
+              {splash && <SplashScreen key="splash" onDone={() => setSplash(false)} />}
+            </AnimatePresence>
+            {!splash && <Outlet />}
+          </CartProvider>
+        </LocationProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

@@ -35,19 +35,19 @@ function DeliveryPage() {
     <SiteShell>
       <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">
         <div className="text-xs uppercase tracking-wider text-primary">Delivery Partner</div>
-        <h1 className="font-[Fraunces] text-4xl font-black md:text-5xl">Hey {user?.name?.split(" ")[0] || "Rider"} 👋</h1>
+        <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">Hey {user?.name?.split(" ")[0] || "Rider"} 👋</h1>
         <p className="mt-1 text-muted-foreground">3 deliveries pending in your zone.</p>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             { l: "Today's Earnings", v: `₹${earnings}`, i: IndianRupee },
             { l: "Active Drops", v: String(list.filter((l) => l.status !== "Delivered").length), i: Package },
             { l: "Distance", v: "12.4 km", i: Bike },
           ].map((s) => (
-            <div key={s.l} className="rounded-2xl border border-border bg-card p-5">
-              <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground"><s.i className="h-5 w-5" /></span>
-              <div className="mt-3 text-2xl font-bold">{s.v}</div>
-              <div className="text-xs text-muted-foreground">{s.l}</div>
+            <div key={s.l} className="rounded-2xl border border-border bg-card p-3 md:p-5">
+              <span className="grid h-8 w-8 place-items-center rounded-xl gradient-primary text-primary-foreground md:h-10 md:w-10"><s.i className="h-4 w-4 md:h-5 md:w-5" /></span>
+              <div className="mt-2 text-lg font-bold md:mt-3 md:text-2xl">{s.v}</div>
+              <div className="text-[10px] text-muted-foreground md:text-xs">{s.l}</div>
             </div>
           ))}
         </div>
@@ -62,7 +62,7 @@ function DeliveryPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">{o.id}</span>
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Room {o.room}</span>
-                      <span className="text-[10px] text-muted-foreground">· {o.deliveryTime}</span>
+                      <span className="text-[10px] text-muted-foreground">· {o.delivery_time}</span>
                     </div>
                     <div className="mt-1 font-semibold">{o.customer} · ₹{o.total}</div>
                     <div className="text-xs text-muted-foreground">{o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}</div>

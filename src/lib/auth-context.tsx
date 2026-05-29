@@ -36,7 +36,7 @@ function setCached(u: User | null) {
 
 async function fetchProfile(id: string): Promise<User | null> {
   try {
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", id).single();
+    const { data, error } = await (supabase.from("profiles") as any).select("*").eq("id", id).single();
     if (error) { console.error("[Auth] Profile fetch error:", error); return null; }
     if (!data) return null;
     const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Wait briefly for trigger to auto-create profile, then upsert
       await new Promise(r => setTimeout(r, 800));
-      const { error: profileError } = await supabase.from("profiles").upsert({
+      const { error: profileError } = await (supabase.from("profiles") as any).upsert({
         id: data.user.id,
         name,
         email: email.trim(),

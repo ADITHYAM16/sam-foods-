@@ -12,7 +12,9 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
           <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-primary/40" />
           <motion.div animate={{ y: [0, -14, 0] }} transition={{ duration: 6, repeat: Infinity }} className="absolute bottom-12 left-12 right-12 text-primary-foreground">
             <Link to="/" className="inline-flex items-center gap-2">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/15 backdrop-blur"><ChefHat className="h-5 w-5" /></span>
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-white overflow-hidden shadow-glow">
+                <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-10 w-10 rounded-full object-cover" />
+              </span>
               <span className="font-[Fraunces] text-2xl font-bold">SAM Foods</span>
             </Link>
             <h2 className="mt-6 max-w-md font-[Fraunces] text-4xl font-black leading-tight">A single hotel kitchen, made for cravings.</h2>
@@ -22,7 +24,9 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         <div className="flex items-center justify-center px-6 py-12">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
             <Link to="/" className="mb-8 inline-flex items-center gap-2 md:hidden">
-              <span className="grid h-9 w-9 place-items-center rounded-xl gradient-primary"><ChefHat className="h-5 w-5 text-primary-foreground" /></span>
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-white overflow-hidden shadow-glow">
+                <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
+              </span>
               <span className="font-[Fraunces] text-xl font-bold">SAM Foods</span>
             </Link>
             <h1 className="font-[Fraunces] text-4xl font-black">{title}</h1>

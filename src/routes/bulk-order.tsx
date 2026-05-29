@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { CalendarDays, CheckCircle2, Loader2, MapPin, PartyPopper, Phone, User, Users, Wallet } from "lucide-react";
+import { CalendarDays, CheckCircle2, Loader2, MapPin, Navigation, PartyPopper, Phone, User, Users, Wallet, UtensilsCrossed } from "lucide-react";
 import { motion } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { Field } from "./login";
@@ -11,10 +11,15 @@ export const Route = createFileRoute("/bulk-order")({
   head: () => ({ meta: [{ title: "Bulk Catering — SAM Foods" }] }),
 });
 
+const MENU_TYPES = ["Breakfast", "Lunch", "Dinner", "Full Day", "Custom"] as const;
+type MenuType = typeof MENU_TYPES[number];
+
 function BulkOrderPage() {
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [menuTypes, setMenuTypes] = useState<MenuType[]>([]);
   const [f, setF] = useState({
     name: "", phone: "", event: "Wedding", people: "50", date: "", location: "",
     menu: "", budget: "₹25,000 - ₹50,000",
@@ -22,21 +27,38 @@ function BulkOrderPage() {
 
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
+  const toggleMenuType = (t: MenuType) =>
+    setMenuTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+
+  const fetchGPS = () => {
+    if (!navigator.geolocation) return;
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords: { latitude: lat, longitude: lng } }) => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+          const json = await res.json();
+          set("location")(json.display_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        } catch { /* ignore */ } finally { setGpsLoading(false); }
+      },
+      () => setGpsLoading(false),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setLoading(true);
     try {
+      const menuRequest = [
+        menuTypes.length ? `Menu type: ${menuTypes.join(", ")}` : "",
+        f.menu,
+      ].filter(Boolean).join(" | ");
       const { error } = await supabase.from("bulk_orders").insert({
-        name: f.name,
-        phone: f.phone,
-        event: f.event,
-        people: parseInt(f.people, 10),
-        date: f.date,
-        location: f.location,
-        menu_request: f.menu || null,
-        budget: f.budget,
-        status: "Pending",
+        name: f.name, phone: f.phone, event: f.event,
+        people: parseInt(f.people, 10), date: f.date, location: f.location,
+        menu_request: menuRequest || null, budget: f.budget, status: "Pending",
       });
       if (error) throw new Error(error.message);
       setDone(true);
@@ -50,6 +72,7 @@ function BulkOrderPage() {
 
   const reset = () => {
     setDone(false);
+    setMenuTypes([]);
     setF({ name: "", phone: "", event: "Wedding", people: "50", date: "", location: "", menu: "", budget: "₹25,000 - ₹50,000" });
   };
 
@@ -61,7 +84,7 @@ function BulkOrderPage() {
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
             <PartyPopper className="h-3.5 w-3.5 text-primary" /> Catering & Bulk Booking
           </div>
-          <h1 className="mt-4 max-w-2xl font-[Fraunces] text-5xl font-black md:text-6xl">Make your event <span className="text-gradient">unforgettable</span>.</h1>
+          <h1 className="mt-4 max-w-2xl font-[Fraunces] text-3xl font-black md:text-6xl">Make your event <span className="text-gradient">unforgettable</span>.</h1>
           <p className="mt-3 max-w-xl text-lg text-muted-foreground">From intimate gatherings to grand weddings — SAM's catering team builds custom menus, on-site setup, and unforgettable food.</p>
         </div>
       </section>
@@ -82,7 +105,44 @@ function BulkOrderPage() {
               <SelectBox label="Event type" icon={<PartyPopper className="h-4 w-4" />} value={f.event} onChange={set("event")} options={["Wedding", "Birthday", "Corporate", "Festival", "House Party", "Other"]} />
               <Field icon={<Users className="h-4 w-4" />} type="number" placeholder="Number of people" value={f.people} onChange={set("people")} min={10} required />
               <Field icon={<CalendarDays className="h-4 w-4" />} type="date" value={f.date} onChange={set("date")} required />
-              <Field icon={<MapPin className="h-4 w-4" />} placeholder="Event location" value={f.location} onChange={set("location")} required />
+
+              {/* Location with GPS */}
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={fetchGPS}
+                  disabled={gpsLoading}
+                  className="flex items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-60"
+                >
+                  <Navigation className="h-3.5 w-3.5" />
+                  {gpsLoading ? "Fetching…" : "Use my current location"}
+                </button>
+                <Field icon={<MapPin className="h-4 w-4" />} placeholder="Event location" value={f.location} onChange={set("location")} required />
+              </div>
+
+              {/* Menu Type */}
+              <div className="sm:col-span-2">
+                <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <UtensilsCrossed className="h-3.5 w-3.5 text-primary" /> Menu Type
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {MENU_TYPES.map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleMenuType(t)}
+                      className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition ${
+                        menuTypes.includes(t)
+                          ? "gradient-primary border-transparent text-primary-foreground shadow-elegant"
+                          : "border-border bg-background hover:bg-accent"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <SelectBox className="sm:col-span-2" label="Budget range" icon={<Wallet className="h-4 w-4" />} value={f.budget} onChange={set("budget")}
                 options={["₹10,000 - ₹25,000", "₹25,000 - ₹50,000", "₹50,000 - ₹1,00,000", "₹1,00,000+"]} />
               <label className="sm:col-span-2">
@@ -125,10 +185,16 @@ function SelectBox({ label, icon, value, onChange, options, className = "" }: { 
   return (
     <label className={className}>
       <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-4 py-3 focus-within:border-primary focus-within:shadow-glow">
+      <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-4 py-3 focus-within:border-primary">
         {icon && <span className="text-muted-foreground">{icon}</span>}
-        <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-transparent text-sm outline-none">
-          {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-background text-foreground text-sm outline-none cursor-pointer"
+        >
+          {options.map((o) => (
+            <option key={o} value={o} className="bg-card text-foreground">{o}</option>
+          ))}
         </select>
       </div>
     </label>

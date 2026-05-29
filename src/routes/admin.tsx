@@ -234,7 +234,7 @@ function AdminPage() {
                         <StatusPill s={b.status} />
                         {b.status === "Pending" && (
                           <button onClick={async () => {
-                            await supabase.from("bulk_orders").update({ status: "Confirmed" }).eq("id", b.id);
+                            await (supabase.from("bulk_orders") as any).update({ status: "Confirmed" }).eq("id", b.id);
                             setBulkOrders(p => p.map(x => x.id === b.id ? { ...x, status: "Confirmed" } : x));
                           }} className="rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
                             Confirm

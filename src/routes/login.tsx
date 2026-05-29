@@ -89,8 +89,8 @@ function LoginPage() {
       {/* Top bar */}
       <div className="flex h-16 items-center justify-between border-b border-border px-6">
         <Link to="/login" className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl gradient-primary shadow-glow">
-            <ChefHat className="h-5 w-5 text-primary-foreground" />
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-white overflow-hidden shadow-glow">
+            <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
           </span>
           <span className="font-[Fraunces] text-xl font-bold">SAM <span className="text-gradient">Foods</span></span>
         </Link>
@@ -101,7 +101,7 @@ function LoginPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
 
           <div className="mb-6 text-center">
-            <h1 className="font-[Fraunces] text-4xl font-black">Welcome to SAM</h1>
+            <h1 className="font-[Fraunces] text-3xl font-black md:text-4xl">Welcome to SAM</h1>
             <p className="mt-1 text-muted-foreground">Order food, track deliveries, book catering.</p>
           </div>
 

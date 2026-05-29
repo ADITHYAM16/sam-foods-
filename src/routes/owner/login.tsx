@@ -55,8 +55,8 @@ function OwnerLoginPage() {
       {/* Top bar */}
       <div className="flex h-16 items-center justify-between border-b border-border px-6">
         <Link to="/login" className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl gradient-primary shadow-glow">
-            <ChefHat className="h-5 w-5 text-primary-foreground" />
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-white overflow-hidden shadow-glow">
+            <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
           </span>
           <span className="font-[Fraunces] text-xl font-bold">SAM <span className="text-gradient">Foods</span></span>
         </Link>
