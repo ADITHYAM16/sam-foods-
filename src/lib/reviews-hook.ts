@@ -16,11 +16,16 @@ export function useReviews() {
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
-    const { data, error } = await (supabase.from("reviews") as any)
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (!error) setReviews((data as Review[]) ?? []);
-    setLoading(false);
+    try {
+      const { data, error } = await (supabase.from("reviews") as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) setReviews(data as Review[]);
+    } catch (_) {
+      // table may not exist yet
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -38,6 +43,7 @@ export function useReviews() {
       { onConflict: "user_id" }
     );
     if (error) throw new Error(error.message);
+    await fetch();
   };
 
   return { reviews, loading, submitReview };

@@ -100,27 +100,21 @@ export function useOrders(): Order[] {
   const [list, setList] = useState<Order[]>([]);
 
   useEffect(() => {
-    // Initial fetch
-    supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-      });
+    const fetchOrders = () =>
+      supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
+        })
+        .catch(() => {});
 
-    // Real-time subscription
+    fetchOrders();
+
     const channel = supabase
       .channel("orders-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
-        supabase
-          .from("orders")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .then(({ data }) => {
-            if (data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-          });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetchOrders)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -134,27 +128,23 @@ export function useMyOrders(userId: string | null | undefined): Order[] {
 
   useEffect(() => {
     if (!userId) return;
-    supabase
-      .from("orders")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-      });
+
+    const fetchMyOrders = () =>
+      supabase
+        .from("orders")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
+        })
+        .catch(() => {});
+
+    fetchMyOrders();
 
     const channel = supabase
       .channel(`orders-user-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${userId}` }, () => {
-        supabase
-          .from("orders")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .then(({ data }) => {
-            if (data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-          });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${userId}` }, fetchMyOrders)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

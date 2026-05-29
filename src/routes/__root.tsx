@@ -198,7 +198,7 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
               className="relative h-28 w-28 rounded-full bg-white shadow-glow overflow-hidden border-4 border-primary/20"
               style={{ willChange: "transform" }}
             >
-              <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-full w-full object-cover" />
+              <img src="/logo.png.jpeg" alt="SAM Foods" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             </motion.div>
           </div>
 
@@ -250,7 +250,9 @@ function RootComponent() {
             <AnimatePresence mode="wait">
               {splash && <SplashScreen key="splash" onDone={() => setSplash(false)} />}
             </AnimatePresence>
-            {!splash && <Outlet />}
+            <div style={{ visibility: splash ? "hidden" : "visible" }}>
+              <Outlet />
+            </div>
           </CartProvider>
         </LocationProvider>
       </AuthProvider>
