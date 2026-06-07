@@ -1,6 +1,11 @@
 import { Heart, Plus, Star } from "lucide-react";
 import { motion } from "framer-motion";
+<<<<<<< HEAD
 import { useState, useEffect } from "react";
+=======
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+>>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
 import type { FoodItem } from "@/lib/menu-data";
 import { useCart } from "@/lib/cart-context";
 
@@ -18,6 +23,7 @@ function toggleFavStorage(id: string): boolean {
 
 export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }) {
   const { add } = useCart();
+  const { t } = useTranslation();
   const [fav, setFav] = useState(false);
   const [burst, setBurst] = useState(false);
 
@@ -56,7 +62,7 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
         )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
           <span className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold backdrop-blur ${item.veg ? "border-emerald-600/50 bg-emerald-50/70 text-emerald-700" : "border-rose-600/50 bg-rose-50/70 text-rose-700"}`}>
-            <span className={`h-2 w-2 rounded-full ${item.veg ? "bg-emerald-600" : "bg-rose-600"}`} /> {item.veg ? "VEG" : "NON-VEG"}
+            <span className={`h-2 w-2 rounded-full ${item.veg ? "bg-emerald-600" : "bg-rose-600"}`} /> {item.veg ? t("veg") : t("nonVeg")}
           </span>
           <button
             aria-label="Favourite"
@@ -68,27 +74,28 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
         </div>
         {item.badge && (
           <span className="absolute bottom-3 left-3 rounded-full gradient-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground shadow-glow">
-            {item.badge}
+            {item.badgeKey ? t(item.badgeKey) : item.badge}
           </span>
         )}
       </div>
 
       <div className="flex flex-1 flex-col p-2 md:p-4">
         <div className="flex items-start justify-between gap-1">
-          <h3 className="font-[Fraunces] text-sm font-bold leading-snug md:text-lg">{item.name}</h3>
+          <h3 className="font-[Fraunces] text-sm font-bold leading-snug md:text-lg">{t(item.nameKey)}</h3>
           <span className="flex shrink-0 items-center gap-1 rounded-md bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
             <Star className="h-3 w-3 fill-current" /> {item.rating}
           </span>
         </div>
-        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground md:line-clamp-2 md:text-sm">{item.description}</p>
+        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground md:line-clamp-2 md:text-sm">{t(item.descKey)}</p>
         <div className="mt-auto flex items-center justify-between pt-2 md:pt-4">
           <div>
-            <div className="text-[10px] uppercase text-muted-foreground">Price</div>
+            <div className="text-[10px] uppercase text-muted-foreground">{t("price")}</div>
             <div className="text-base font-bold md:text-xl">₹{item.price}</div>
           </div>
 
           {/* Add button */}
           <div className="relative">
+<<<<<<< HEAD
             {item.sold_out ? (
               <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground md:px-4 md:py-2">
                 Sold Out
@@ -111,6 +118,26 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
               </motion.button>
             )}
             {burst && !item.sold_out && (
+=======
+            <motion.button
+              onClick={handleAdd}
+              whileTap={{ scale: 0.82 }}
+              className="relative inline-flex items-center gap-1 overflow-hidden rounded-full gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant md:gap-1.5 md:px-4 md:py-2 md:text-sm"
+            >
+              <Plus className="h-3 w-3 md:h-4 md:w-4" /> {t("add")}
+              {/* ripple */}
+              {burst && (
+                <motion.span
+                  initial={{ scale: 0, opacity: 0.6 }}
+                  animate={{ scale: 3.5, opacity: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className="pointer-events-none absolute inset-0 rounded-full bg-white"
+                />
+              )}
+            </motion.button>
+            {/* floating +1 */}
+            {burst && (
+>>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
               <motion.span
                 key={Date.now()}
                 initial={{ opacity: 1, y: 0, scale: 1 }}

@@ -4,14 +4,20 @@ export interface FoodItem {
   id: string;
   name: string;
   description: string;
+  nameKey: string;
+  descKey: string;
   price: number;
   rating: number;
   category: Category;
   veg: boolean;
   image: string;
   badge?: string;
+<<<<<<< HEAD
   available?: boolean;
   sold_out?: boolean;
+=======
+  badgeKey?: string;
+>>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
 }
 
 export const CATEGORIES: Category[] = ["Briyani", "Meals", "Starters", "Drinks", "Desserts"];
@@ -21,17 +27,22 @@ export const MENU: FoodItem[] = [
     id: "b1",
     name: "SAM Special Veg Biryani",
     description: "Long-grain basmati, slow-dum veggies, saffron & secret SAM masala.",
+    nameKey: "name_b1",
+    descKey: "desc_b1",
     price: 289,
     rating: 4.8,
     category: "Briyani",
     veg: true,
     image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80",
     badge: "Bestseller",
+    badgeKey: "badge_bestseller",
   },
   {
     id: "b2",
     name: "Paneer Dum Biryani",
     description: "Tender paneer, layered with fragrant rice & roasted spices.",
+    nameKey: "name_b2",
+    descKey: "desc_b2",
     price: 379,
     rating: 4.7,
     category: "Briyani",
@@ -42,6 +53,8 @@ export const MENU: FoodItem[] = [
     id: "b3",
     name: "Veg Hyderabadi Biryani",
     description: "Garden vegetables, ghee rice, mint & fried onions.",
+    nameKey: "name_b3",
+    descKey: "desc_b3",
     price: 219,
     rating: 4.5,
     category: "Briyani",
@@ -52,6 +65,8 @@ export const MENU: FoodItem[] = [
     id: "m1",
     name: "South Indian Thali",
     description: "Sambar, rasam, 3 curries, rice, papad, curd & sweet.",
+    nameKey: "name_m1",
+    descKey: "desc_m1",
     price: 199,
     rating: 4.6,
     category: "Meals",
@@ -62,6 +77,8 @@ export const MENU: FoodItem[] = [
     id: "m2",
     name: "Paneer Combo Meal",
     description: "Steamed rice, paneer butter masala, roti, salad & dessert.",
+    nameKey: "name_m2",
+    descKey: "desc_m2",
     price: 259,
     rating: 4.5,
     category: "Meals",
@@ -72,17 +89,22 @@ export const MENU: FoodItem[] = [
     id: "s1",
     name: "Crispy Veg 65",
     description: "Spicy fried veggie bites tossed with curry leaves.",
+    nameKey: "name_s1",
+    descKey: "desc_s1",
     price: 229,
     rating: 4.7,
     category: "Starters",
     veg: true,
     image: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=900&q=80",
     badge: "Spicy",
+    badgeKey: "badge_spicy",
   },
   {
     id: "s2",
     name: "Paneer Tikka",
     description: "Charred paneer cubes marinated in yogurt & spices.",
+    nameKey: "name_s2",
+    descKey: "desc_s2",
     price: 209,
     rating: 4.6,
     category: "Starters",
@@ -93,6 +115,8 @@ export const MENU: FoodItem[] = [
     id: "s3",
     name: "Gobi Manchurian",
     description: "Crispy cauliflower in a tangy Indo-Chinese sauce.",
+    nameKey: "name_s3",
+    descKey: "desc_s3",
     price: 179,
     rating: 4.4,
     category: "Starters",
@@ -103,6 +127,8 @@ export const MENU: FoodItem[] = [
     id: "d1",
     name: "Masala Lemon Soda",
     description: "Fizzy lemon with rock salt & mint — refreshing kick.",
+    nameKey: "name_d1",
+    descKey: "desc_d1",
     price: 79,
     rating: 4.3,
     category: "Drinks",
@@ -113,6 +139,8 @@ export const MENU: FoodItem[] = [
     id: "d2",
     name: "Mango Lassi",
     description: "Thick yogurt smoothie with sweet alphonso mango.",
+    nameKey: "name_d2",
+    descKey: "desc_d2",
     price: 99,
     rating: 4.7,
     category: "Drinks",
@@ -123,6 +151,8 @@ export const MENU: FoodItem[] = [
     id: "ds1",
     name: "Gulab Jamun (2 pcs)",
     description: "Warm milk dumplings soaked in cardamom syrup.",
+    nameKey: "name_ds1",
+    descKey: "desc_ds1",
     price: 89,
     rating: 4.8,
     category: "Desserts",
@@ -133,6 +163,8 @@ export const MENU: FoodItem[] = [
     id: "ds2",
     name: "Classic Rasmalai",
     description: "Soft cottage cheese discs in saffron-pistachio milk.",
+    nameKey: "name_ds2",
+    descKey: "desc_ds2",
     price: 119,
     rating: 4.6,
     category: "Desserts",

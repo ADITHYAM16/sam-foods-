@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import { useMemo, useState, useEffect } from "react";
+<<<<<<< HEAD
+=======
+import { useTranslation } from "react-i18next";
+>>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
 import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { FoodCard } from "@/components/site/FoodCard";
@@ -21,7 +25,12 @@ export const Route = createFileRoute("/")({
 
 type Sort = "popular" | "price-low" | "price-high" | "rating";
 
+<<<<<<< HEAD
 function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRating: string | null }) {
+=======
+function HeroSection() {
+  const { t, i18n } = useTranslation();
+>>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
   const scrollY = useMotionValue(0);
   const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
@@ -41,8 +50,25 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
       >
         <div>
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-primary" /> Hotel-quality. Delivered in 30 min.
-          </motion.div>
+
+  <select
+    value={i18n.language}
+    onChange={(e) => {
+      i18n.changeLanguage(e.target.value);
+      localStorage.setItem("sam_lang", e.target.value);
+    }}
+    className="rounded border border-border bg-background text-foreground px-2 py-1 outline-none"
+  >
+    <option value="en">English</option>
+    <option value="ta">தமிழ்</option>
+    <option value="te">తెలుగు</option>
+    <option value="hi">हिन्दी</option>
+  </select>
+
+  <Sparkles className="h-3.5 w-3.5 text-primary" />
+  Hotel-quality. Delivered in 30 min.
+
+</motion.div>
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-5 text-4xl font-black leading-[1.05] md:text-7xl">
             Crave it. <br />
             <span className="text-gradient">Tap it.</span> Devour it.
@@ -52,10 +78,10 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-7 flex flex-wrap items-center gap-3">
             <a href="#menu" className="inline-flex items-center gap-2 rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-105">
-              <Flame className="h-4 w-4" /> Order Now
+              <Flame className="h-4 w-4" /> {t("orderNow")}
             </a>
             <Link to="/bulk-order" className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 px-6 py-3 font-semibold backdrop-blur transition hover:bg-accent">
-              <UtensilsCrossed className="h-4 w-4" /> Bulk Booking <ArrowRight className="h-4 w-4" />
+              <UtensilsCrossed className="h-4 w-4" /> {t("bulkBooking")} <ArrowRight className="h-4 w-4" />
             </Link>
           </motion.div>
           <div className="mt-8 flex items-center gap-6 text-sm text-muted-foreground">
@@ -98,7 +124,11 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
 }
 
 function Index() {
+<<<<<<< HEAD
   const { menu } = useMenu();
+=======
+  const { t } = useTranslation();
+>>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
   const [cat, setCat] = useState<Category | "All">("All");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("popular");
@@ -162,25 +192,25 @@ function Index() {
       <section id="menu" className="mx-auto max-w-7xl scroll-mt-20 overflow-hidden px-4 py-12 md:px-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">The Menu</div>
-            <h2 className="mt-2 text-4xl font-black md:text-5xl">Today on the pass</h2>
+            <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">{t("theMenu")}</div>
+            <h2 className="mt-2 text-4xl font-black md:text-5xl">{t("todayOnThePass")}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2">
               <Search className="h-4 w-4 text-muted-foreground" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes…" className="w-32 bg-transparent text-sm outline-none md:w-44" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search_placeholder")} className="w-32 bg-transparent text-sm outline-none md:w-44" />
             </div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
               <span className="grid h-4 w-4 place-items-center rounded-sm border-2 border-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /></span>
-              100% Pure Veg
+              {t("pureVeg")}
             </span>
             <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm">
               <Filter className="h-4 w-4" />
               <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-transparent outline-none">
-                <option value="popular">Popular</option>
-                <option value="rating">Top rated</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
+                <option value="popular">{t("sort_popular")}</option>
+                <option value="rating">{t("sort_rating")}</option>
+                <option value="price-low">{t("sort_priceLow")}</option>
+                <option value="price-high">{t("sort_priceHigh")}</option>
               </select>
             </div>
           </div>
@@ -193,7 +223,7 @@ function Index() {
               onClick={() => setCat(c as any)}
               className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${cat === c ? "gradient-primary text-primary-foreground shadow-elegant" : "border border-border bg-card hover:bg-accent"}`}
             >
-              {c}
+              {t(`cat_${c.toLowerCase()}`)}
             </button>
           ))}
         </div>
@@ -212,7 +242,7 @@ function Index() {
             </motion.div>
           ))}
         </div>
-        {list.length === 0 && <p className="py-16 text-center text-muted-foreground">No dishes match your search.</p>}
+        {list.length === 0 && <p className="py-16 text-center text-muted-foreground">{t("noResults")}</p>}
       </section>
 
       {/* REVIEWS */}
