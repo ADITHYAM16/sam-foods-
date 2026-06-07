@@ -12,12 +12,9 @@ export interface FoodItem {
   veg: boolean;
   image: string;
   badge?: string;
-<<<<<<< HEAD
+  badgeKey?: string;
   available?: boolean;
   sold_out?: boolean;
-=======
-  badgeKey?: string;
->>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
 }
 
 export const CATEGORIES: Category[] = ["Briyani", "Meals", "Starters", "Drinks", "Desserts"];

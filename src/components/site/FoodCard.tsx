@@ -1,11 +1,7 @@
 import { Heart, Plus, Star } from "lucide-react";
 import { motion } from "framer-motion";
-<<<<<<< HEAD
 import { useState, useEffect } from "react";
-=======
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
->>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
 import type { FoodItem } from "@/lib/menu-data";
 import { useCart } from "@/lib/cart-context";
 
@@ -95,7 +91,6 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
 
           {/* Add button */}
           <div className="relative">
-<<<<<<< HEAD
             {item.sold_out ? (
               <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground md:px-4 md:py-2">
                 Sold Out
@@ -106,7 +101,7 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
                 whileTap={{ scale: 0.82 }}
                 className="relative inline-flex items-center gap-1 overflow-hidden rounded-full gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant md:gap-1.5 md:px-4 md:py-2 md:text-sm"
               >
-                <Plus className="h-3 w-3 md:h-4 md:w-4" /> Add
+                <Plus className="h-3 w-3 md:h-4 md:w-4" /> {t("add")}
                 {burst && (
                   <motion.span
                     initial={{ scale: 0, opacity: 0.6 }}
@@ -118,26 +113,6 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
               </motion.button>
             )}
             {burst && !item.sold_out && (
-=======
-            <motion.button
-              onClick={handleAdd}
-              whileTap={{ scale: 0.82 }}
-              className="relative inline-flex items-center gap-1 overflow-hidden rounded-full gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant md:gap-1.5 md:px-4 md:py-2 md:text-sm"
-            >
-              <Plus className="h-3 w-3 md:h-4 md:w-4" /> {t("add")}
-              {/* ripple */}
-              {burst && (
-                <motion.span
-                  initial={{ scale: 0, opacity: 0.6 }}
-                  animate={{ scale: 3.5, opacity: 0 }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                  className="pointer-events-none absolute inset-0 rounded-full bg-white"
-                />
-              )}
-            </motion.button>
-            {/* floating +1 */}
-            {burst && (
->>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
               <motion.span
                 key={Date.now()}
                 initial={{ opacity: 1, y: 0, scale: 1 }}

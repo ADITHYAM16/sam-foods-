@@ -546,7 +546,7 @@ function AdminPage() {
                 <ChefHat className="h-5 w-5 text-primary" /> Manage Menu
               </h2>
               <button
-                onClick={() => setEditing({ id: "new", name: "", description: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "", badge: "" })}
+                onClick={() => setEditing({ id: "new", name: "", description: "", nameKey: "", descKey: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "", badge: "" })}
                 className="inline-flex items-center gap-1.5 rounded-full gradient-primary px-4 py-2 text-xs font-bold text-primary-foreground"
               >
                 <Plus className="h-3.5 w-3.5" /> Add item

@@ -34,7 +34,7 @@ function setCached(u: User | null) {
   else localStorage.removeItem(CACHE_KEY);
 }
 
-async function fetchProfile(id: string, email?: string): Promise<User | null> {
+async function fetchProfile(id: string, email?: string, displayName?: string): Promise<User | null> {
   try {
     const { data, error } = await (supabase.from("profiles") as any)
       .select("*").eq("id", id).single();
@@ -45,21 +45,32 @@ async function fetchProfile(id: string, email?: string): Promise<User | null> {
       return u;
     }
 
-    // Profile missing — try to create from delivery_agents table
+    // Profile missing — try delivery_agents table first
     const { data: agentData } = await (supabase.from("delivery_agents") as any)
       .select("id,name,email,phone").eq("id", id).single();
 
     if (agentData) {
       await (supabase.from("profiles") as any).upsert({
-        id: agentData.id,
-        name: agentData.name,
-        email: agentData.email,
-        phone: agentData.phone ?? null,
-        role: "delivery",
+        id: agentData.id, name: agentData.name, email: agentData.email,
+        phone: agentData.phone ?? null, role: "delivery",
       }, { onConflict: "id" });
       const u: User = { id: agentData.id, name: agentData.name, email: agentData.email, phone: agentData.phone ?? undefined, role: "delivery" };
       setCached(u);
       return u;
+    }
+
+    // Auto-create profile for Google / OAuth users
+    if (email) {
+      const name = displayName || email.split("@")[0];
+      const { error: upsertErr } = await (supabase.from("profiles") as any).upsert({
+        id, name, email, phone: null, role: "customer",
+      }, { onConflict: "id" });
+      if (!upsertErr) {
+        const u: User = { id, name, email, role: "customer" };
+        setCached(u);
+        return u;
+      }
+      console.error("[Auth] Auto-create profile error:", upsertErr);
     }
 
     console.error("[Auth] Profile fetch error:", error);
@@ -77,12 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(async ({ data, error }) => {
       if (error) console.error("[Auth] Session error:", error);
       if (data.session?.user) {
-        // Use cache immediately, refresh in background
         const cached = getCached();
         if (cached) setUser(cached);
         setLoading(false);
-        // Refresh profile in background
-        fetchProfile(data.session.user.id, data.session.user.email ?? undefined).then(p => { if (p) setUser(p); });
+        const su = data.session.user;
+        const displayName = su.user_metadata?.full_name || su.user_metadata?.name || undefined;
+        fetchProfile(su.id, su.email ?? undefined, displayName).then(p => { if (p) setUser(p); });
       } else {
         setCached(null);
         setUser(null);
@@ -93,9 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
+        const su = session.user;
+        const displayName = su.user_metadata?.full_name || su.user_metadata?.name || undefined;
         const cached = getCached();
-        if (cached && cached.id === session.user.id) setUser(cached);
-        fetchProfile(session.user.id, session.user.email ?? undefined).then(p => { if (p) setUser(p); });
+        if (cached && cached.id === su.id) setUser(cached);
+        fetchProfile(su.id, su.email ?? undefined, displayName).then(p => { if (p) setUser(p); });
       } else {
         setCached(null);
         setUser(null);
@@ -124,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log("[Auth] Login successful, fetching profile...");
-      const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim());
+      const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim(), data.user.user_metadata?.full_name);
       
       if (!profile) {
         throw new Error("Could not load profile. Please try again.");

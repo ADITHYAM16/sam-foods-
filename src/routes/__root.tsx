@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
 import { LocationProvider } from "@/lib/location-context";
+import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -243,6 +244,23 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [splash, setSplash] = useState(true);
+  const router = useRouter();
+
+  // Handle Supabase OAuth redirect — the hash contains access_token after Google sign-in
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (hash.includes("access_token") || hash.includes("error_description")) {
+      // Let Supabase client parse the hash and establish the session
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) {
+          // Clean the hash from the URL without reload
+          window.history.replaceState({}, document.title, window.location.pathname);
+          router.navigate({ to: "/" });
+        }
+      });
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,10 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import { useMemo, useState, useEffect } from "react";
-<<<<<<< HEAD
-=======
 import { useTranslation } from "react-i18next";
->>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
 import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { FoodCard } from "@/components/site/FoodCard";
@@ -25,12 +22,8 @@ export const Route = createFileRoute("/")({
 
 type Sort = "popular" | "price-low" | "price-high" | "rating";
 
-<<<<<<< HEAD
 function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRating: string | null }) {
-=======
-function HeroSection() {
   const { t, i18n } = useTranslation();
->>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
   const scrollY = useMotionValue(0);
   const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
@@ -124,11 +117,8 @@ function HeroSection() {
 }
 
 function Index() {
-<<<<<<< HEAD
   const { menu } = useMenu();
-=======
   const { t } = useTranslation();
->>>>>>> 0365ec21e6ac6c7ed594c3b4dba041fd4289510e
   const [cat, setCat] = useState<Category | "All">("All");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("popular");

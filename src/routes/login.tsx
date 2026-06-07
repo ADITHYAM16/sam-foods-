@@ -42,9 +42,13 @@ function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.origin + "/" },
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          queryParams: { access_type: "offline", prompt: "consent" },
+        },
       });
       if (error) throw new Error(error.message);
+      // browser will redirect — no need to setBusy(false)
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Google sign-in failed.");
       setBusy(false);
