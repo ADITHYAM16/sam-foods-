@@ -25,4 +25,11 @@ create policy "Users can update own review"
   using (auth.uid() = user_id);
 
 -- Enable realtime
-alter publication supabase_realtime add table public.reviews;
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'reviews'
+  ) then
+    alter publication supabase_realtime add table public.reviews;
+  end if;
+end $$;

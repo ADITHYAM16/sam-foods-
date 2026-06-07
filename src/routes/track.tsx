@@ -63,16 +63,20 @@ function TrackPage() {
     const load = async () => {
       setLoading(true);
       if (orderId) {
+        // Always try to fetch by orderId first (works for guests and logged-in users)
         const { data } = await (supabase.from("orders") as any).select("*").eq("id", orderId).single();
-        if (data) setOrder({ ...(data as any), items: (data as any).items as unknown as CartItem[] });
-      } else if (myOrders.length > 0) {
+        if (data) {
+          setOrder({ ...(data as any), items: (data as any).items as unknown as CartItem[] });
+        }
+      } else if (user && myOrders.length > 0) {
+        // Fallback: show most recent order for logged-in user
         const o = myOrders[0] as any;
         setOrder(o);
       }
       setLoading(false);
     };
     load();
-  }, [orderId, myOrders]);
+  }, [orderId, myOrders, user]);
 
   useEffect(() => {
     if (!order?.id) return;
@@ -150,7 +154,7 @@ function TrackPage() {
             </div>
             <div className="flex flex-col items-end gap-2">
               <a href="tel:+919876543210" className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-accent">
-                <Phone className="h-4 w-4" /> Call rider
+                <Phone className="h-4 w-4" /> Call SAM Foods
               </a>
 
               {/* 5-min cancellation button */}

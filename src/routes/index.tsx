@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { FoodCard } from "@/components/site/FoodCard";
-import { CATEGORIES, MENU, type Category } from "@/lib/menu-data";
+import { CATEGORIES, type Category } from "@/lib/menu-data";
+import { useMenu } from "@/lib/menu-hook";
 import { useReviews } from "@/lib/reviews-hook";
 import { useAuth } from "@/lib/auth-context";
 
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/")({
 
 type Sort = "popular" | "price-low" | "price-high" | "rating";
 
-function HeroSection() {
+function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRating: string | null }) {
   const scrollY = useMotionValue(0);
   const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
@@ -58,7 +59,10 @@ function HeroSection() {
             </Link>
           </motion.div>
           <div className="mt-8 flex items-center gap-6 text-sm text-muted-foreground">
-            <div><div className="text-2xl font-bold text-foreground">4.8★</div>12k+ ratings</div>
+            <div>
+              <div className="text-2xl font-bold text-foreground">{avgRating ? `${avgRating}★` : "4.8★"}</div>
+              <div>{reviewCount > 0 ? `${reviewCount} ratings` : "12k+ ratings"}</div>
+            </div>
             <div><div className="text-2xl font-bold text-foreground">30 min</div>avg delivery</div>
             <div><div className="text-2xl font-bold text-foreground">120+</div>signature dishes</div>
           </div>
@@ -94,18 +98,19 @@ function HeroSection() {
 }
 
 function Index() {
+  const { menu } = useMenu();
   const [cat, setCat] = useState<Category | "All">("All");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("popular");
 
   const list = useMemo(() => {
-    let arr = MENU.filter((m) => (cat === "All" ? true : m.category === cat));
+    let arr = menu.filter((m) => (cat === "All" ? true : m.category === cat));
     if (q) arr = arr.filter((m) => (m.name + m.description).toLowerCase().includes(q.toLowerCase()));
     if (sort === "price-low") arr = [...arr].sort((a, b) => a.price - b.price);
     if (sort === "price-high") arr = [...arr].sort((a, b) => b.price - a.price);
     if (sort === "rating") arr = [...arr].sort((a, b) => b.rating - a.rating);
     return arr;
-  }, [cat, q, sort]);
+  }, [menu, cat, q, sort]);
 
   const { reviews, loading: reviewsLoading, submitReview } = useReviews();
   const { user } = useAuth();
@@ -119,6 +124,15 @@ function Index() {
 
   const myReview = reviews.find(r => r.user_id === user?.id);
 
+  // Pre-fill form when user's existing review loads
+  useEffect(() => {
+    if (myReview) {
+      setFormRating(myReview.rating);
+      setFormRole(myReview.role);
+      setFormText(myReview.text);
+    }
+  }, [myReview?.id]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -129,8 +143,6 @@ function Index() {
     try {
       await submitReview(user.id, user.name, formRole, formRating, formText.trim());
       setSubmitMsg("Review submitted! Thank you ❤️");
-      setFormText("");
-      setFormRating(0);
     } catch (e) {
       setSubmitMsg(e instanceof Error ? e.message : "Failed to submit.");
     } finally {
@@ -144,7 +156,7 @@ function Index() {
 
   return (
     <SiteShell>
-      <HeroSection />
+      <HeroSection avgRating={avgRating} reviewCount={reviews.length} />
 
       {/* MENU */}
       <section id="menu" className="mx-auto max-w-7xl scroll-mt-20 overflow-hidden px-4 py-12 md:px-6">
@@ -158,7 +170,7 @@ function Index() {
               <Search className="h-4 w-4 text-muted-foreground" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes…" className="w-32 bg-transparent text-sm outline-none md:w-44" />
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-600/40 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
               <span className="grid h-4 w-4 place-items-center rounded-sm border-2 border-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /></span>
               100% Pure Veg
             </span>
@@ -186,11 +198,11 @@ function Index() {
           ))}
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 items-stretch">
+        <div className="mt-8 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
           {list.map((m, i) => (
             <motion.div
               key={m.id}
-              className="flex"
+              className="flex w-full"
               initial={{ opacity: 0, y: 30, scale: 0.95 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, margin: "-40px" }}

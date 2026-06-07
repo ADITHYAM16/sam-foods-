@@ -34,14 +34,36 @@ function setCached(u: User | null) {
   else localStorage.removeItem(CACHE_KEY);
 }
 
-async function fetchProfile(id: string): Promise<User | null> {
+async function fetchProfile(id: string, email?: string): Promise<User | null> {
   try {
-    const { data, error } = await (supabase.from("profiles") as any).select("*").eq("id", id).single();
-    if (error) { console.error("[Auth] Profile fetch error:", error); return null; }
-    if (!data) return null;
-    const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
-    setCached(u);
-    return u;
+    const { data, error } = await (supabase.from("profiles") as any)
+      .select("*").eq("id", id).single();
+
+    if (!error && data) {
+      const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
+      setCached(u);
+      return u;
+    }
+
+    // Profile missing — try to create from delivery_agents table
+    const { data: agentData } = await (supabase.from("delivery_agents") as any)
+      .select("id,name,email,phone").eq("id", id).single();
+
+    if (agentData) {
+      await (supabase.from("profiles") as any).upsert({
+        id: agentData.id,
+        name: agentData.name,
+        email: agentData.email,
+        phone: agentData.phone ?? null,
+        role: "delivery",
+      }, { onConflict: "id" });
+      const u: User = { id: agentData.id, name: agentData.name, email: agentData.email, phone: agentData.phone ?? undefined, role: "delivery" };
+      setCached(u);
+      return u;
+    }
+
+    console.error("[Auth] Profile fetch error:", error);
+    return null;
   } catch (e) { console.error("[Auth] Profile fetch exception:", e); return null; }
 }
 
@@ -60,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cached) setUser(cached);
         setLoading(false);
         // Refresh profile in background
-        fetchProfile(data.session.user.id).then(p => { if (p) setUser(p); });
+        fetchProfile(data.session.user.id, data.session.user.email ?? undefined).then(p => { if (p) setUser(p); });
       } else {
         setCached(null);
         setUser(null);
@@ -73,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const cached = getCached();
         if (cached && cached.id === session.user.id) setUser(cached);
-        fetchProfile(session.user.id).then(p => { if (p) setUser(p); });
+        fetchProfile(session.user.id, session.user.email ?? undefined).then(p => { if (p) setUser(p); });
       } else {
         setCached(null);
         setUser(null);
@@ -102,10 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log("[Auth] Login successful, fetching profile...");
-      const profile = await fetchProfile(data.user.id);
+      const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim());
       
       if (!profile) {
-        throw new Error("Profile not found. Please contact support.");
+        throw new Error("Could not load profile. Please try again.");
       }
 
       console.log("[Auth] Profile loaded:", profile.email, profile.role);

@@ -20,6 +20,7 @@ function BulkOrderPage() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [menuTypes, setMenuTypes] = useState<MenuType[]>([]);
+  const [submittedPhone, setSubmittedPhone] = useState("");
   const [f, setF] = useState({
     name: "", phone: "", event: "Wedding", people: "50", date: "", location: "",
     menu: "", budget: "₹25,000 - ₹50,000",
@@ -49,18 +50,30 @@ function BulkOrderPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
+
+    // Validation
+    if (f.name.trim().length < 2) return setErr("Please enter your full name.");
+    if (!/^\+?[0-9\s-]{8,15}$/.test(f.phone)) return setErr("Enter a valid phone number.");
+    if (!f.date) return setErr("Please select an event date.");
+    if (new Date(f.date) < new Date(new Date().toDateString())) return setErr("Event date cannot be in the past.");
+    if (parseInt(f.people, 10) < 10) return setErr("Minimum 10 people required.");
+    if (!f.location.trim()) return setErr("Please enter the event location.");
+
     setLoading(true);
+    // Capture phone before reset
+    const submittedPhone = f.phone;
     try {
       const menuRequest = [
         menuTypes.length ? `Menu type: ${menuTypes.join(", ")}` : "",
         f.menu,
       ].filter(Boolean).join(" | ");
       const { error } = await (supabase.from("bulk_orders") as any).insert({
-        name: f.name, phone: f.phone, event: f.event,
-        people: parseInt(f.people, 10), date: f.date, location: f.location,
+        name: f.name.trim(), phone: f.phone.trim(), event: f.event,
+        people: parseInt(f.people, 10), date: f.date, location: f.location.trim(),
         menu_request: menuRequest || null, budget: f.budget, status: "Pending",
       });
       if (error) throw new Error(error.message);
+      setSubmittedPhone(submittedPhone);
       setDone(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {

@@ -4,8 +4,10 @@ import { useAuth } from "@/lib/auth-context";
 import { Login } from "@/pages/Login";
 import { Dashboard } from "@/pages/Dashboard";
 import { DeliveryDashboard } from "@/pages/DeliveryDashboard";
+import { AgentsPage } from "@/pages/AgentsPage";
 
 type ActiveRole = "admin" | "delivery" | null;
+type AdminTab = "dashboard" | "agents";
 
 function LoadingScreen() {
   return (
@@ -19,6 +21,7 @@ function LoadingScreen() {
 function AppContent() {
   const { user, loading } = useAuth();
   const [activeRole, setActiveRole] = useState<ActiveRole>(null);
+  const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
 
   useEffect(() => {
     if (!loading) {
@@ -33,8 +36,9 @@ function AppContent() {
   return (
     <AnimatePresence mode="wait">
       {activeRole === "admin" ? (
-        <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-          <Dashboard />
+        <motion.div key={`admin-${adminTab}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          {adminTab === "dashboard" && <Dashboard onNavigate={setAdminTab} />}
+          {adminTab === "agents" && <AgentsPage onNavigate={setAdminTab} />}
         </motion.div>
       ) : activeRole === "delivery" ? (
         <motion.div key="delivery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ChefHat, ExternalLink, LogOut, Moon, Sun } from "lucide-react";
+import { ChefHat, ExternalLink, LayoutDashboard, LogOut, Moon, Sun, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+
+type AdminTab = "dashboard" | "agents";
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -25,9 +27,11 @@ function useTheme() {
 
 interface AdminShellProps {
   children: ReactNode;
+  activeTab?: AdminTab;
+  onNavigate?: (tab: AdminTab) => void;
 }
 
-export function AdminShell({ children }: AdminShellProps) {
+export function AdminShell({ children, activeTab, onNavigate }: AdminShellProps) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -53,6 +57,29 @@ export function AdminShell({ children }: AdminShellProps) {
               </div>
             </div>
 
+            {/* Nav tabs — only for admin */}
+            {user?.role === "admin" && onNavigate && (
+              <div className="hidden items-center gap-1 rounded-full border border-border bg-background/60 p-1 sm:flex">
+                {([
+                  { tab: "dashboard" as AdminTab, label: "Dashboard", icon: LayoutDashboard },
+                  { tab: "agents" as AdminTab, label: "Agents", icon: Users },
+                ] as const).map(({ tab, label, icon: Icon }) => (
+                  <button
+                    key={tab}
+                    onClick={() => onNavigate(tab)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                      activeTab === tab
+                        ? "gradient-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Spacer */}
             <div className="flex-1" />
 
@@ -67,7 +94,7 @@ export function AdminShell({ children }: AdminShellProps) {
 
             {/* View site */}
             <a
-              href="http://localhost:5173"
+              href={window.location.origin.includes("5174") ? window.location.origin.replace("5174", "5173") : window.location.origin}
               target="_blank"
               rel="noopener noreferrer"
               className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:bg-accent sm:inline-flex"

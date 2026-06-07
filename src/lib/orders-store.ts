@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CartItem } from "./cart-context";
 
@@ -121,6 +121,51 @@ export function useOrders(): Order[] {
   }, []);
 
   return list;
+}
+
+export function useDeliveryOrders(): { orders: Order[]; loading: boolean; newAlert: Order | null; clearAlert: () => void } {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newAlert, setNewAlert] = useState<Order | null>(null);
+  const prevIds = useRef<Set<string>>(new Set());
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const fetch = useCallback(async () => {
+    try {
+      const { data, error } = await (supabase.from("orders") as any)
+        .select("*")
+        .in("status", ["Ready", "Out for delivery", "Delivered"])
+        .gte("created_at", todayStart.toISOString())
+        .order("created_at", { ascending: false });
+      if (!error && data) {
+        const mapped = (data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] }));
+        // detect newly Ready orders
+        mapped.forEach((o) => {
+          if (o.status === "Ready" && !prevIds.current.has(o.id)) {
+            setNewAlert(o);
+            try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch {}
+          }
+        });
+        prevIds.current = new Set(mapped.map((o) => o.id));
+        setOrders(mapped);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch();
+    const channel = supabase
+      .channel("delivery-orders-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetch)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetch]);
+
+  return { orders, loading, newAlert, clearAlert: () => setNewAlert(null) };
 }
 
 export function useMyOrders(userId: string | null | undefined): Order[] {

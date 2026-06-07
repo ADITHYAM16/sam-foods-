@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export type Role = "customer" | "admin" | "delivery";
@@ -22,6 +23,15 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const CACHE_KEY = "sam_user_cache";
 
+// Service role client — bypasses RLS for profile reads in admin panel
+function getServiceClient() {
+  return createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
+
 function getCached(): User | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -34,11 +44,30 @@ function setCached(u: User | null) {
   else localStorage.removeItem(CACHE_KEY);
 }
 
-async function fetchProfile(id: string): Promise<User | null> {
+async function fetchProfile(id: string, email?: string): Promise<User | null> {
   try {
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", id).single();
-    if (error) { console.error("[Auth] Profile fetch error:", error); return null; }
-    if (!data) return null;
+    const sc = getServiceClient();
+    const { data, error } = await sc.from("profiles").select("*").eq("id", id).single();
+
+    if (error || !data) {
+      // Profile missing — auto-create it as admin
+      if (email) {
+        const name = email.split("@")[0];
+        await sc.from("profiles").upsert({
+          id,
+          name,
+          email,
+          role: "admin",
+        }, { onConflict: "id" });
+        const { data: created } = await sc.from("profiles").select("*").eq("id", id).single();
+        if (!created) return null;
+        const u: User = { id: created.id, name: created.name, email: created.email, phone: created.phone ?? undefined, role: created.role as Role };
+        setCached(u);
+        return u;
+      }
+      return null;
+    }
+
     const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
     setCached(u);
     return u;
@@ -60,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cached) setUser(cached);
         setLoading(false);
         // Refresh profile in background
-        fetchProfile(data.session.user.id).then(p => { if (p) setUser(p); });
+        fetchProfile(data.session.user.id, data.session.user.email ?? undefined).then(p => { if (p) setUser(p); });
       } else {
         setCached(null);
         setUser(null);
@@ -73,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const cached = getCached();
         if (cached && cached.id === session.user.id) setUser(cached);
-        fetchProfile(session.user.id).then(p => { if (p) setUser(p); });
+        fetchProfile(session.user.id, session.user.email ?? undefined).then(p => { if (p) setUser(p); });
       } else {
         setCached(null);
         setUser(null);
@@ -102,10 +131,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
  
       console.log("[Auth] Login successful, fetching profile...");
-      const profile = await fetchProfile(data.user.id);
+      const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim());
       
       if (!profile) {
-        throw new Error("Profile not found. Please contact support.");
+        throw new Error("Could not load profile. Please try again.");
       }
 
       console.log("[Auth] Profile loaded:", profile.email, profile.role);

@@ -132,14 +132,7 @@ function OwnerLoginPage() {
               </motion.form>
             </AnimatePresence>
 
-            {/* Credentials hint */}
-            <div className="mt-5 rounded-2xl border border-dashed border-border p-4 text-xs text-muted-foreground">
-              <div className="mb-1.5 font-semibold text-foreground">Login credentials:</div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2"><ShieldCheck className="h-3 w-3 text-amber-500" /> Admin: sam@gmail.com / admin@123</div>
-                <div className="flex items-center gap-2"><Bike className="h-3 w-3 text-amber-500" /> Agent: agent@gmail.com / agent@123</div>
-              </div>
-            </div>
+
           </div>
         </motion.div>
       </div>

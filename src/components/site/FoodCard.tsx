@@ -1,13 +1,29 @@
 import { Heart, Plus, Star } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { FoodItem } from "@/lib/menu-data";
 import { useCart } from "@/lib/cart-context";
+
+const FAV_KEY = "sam_favourites";
+
+function getFavs(): string[] {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]"); } catch { return []; }
+}
+function toggleFavStorage(id: string): boolean {
+  const favs = getFavs();
+  const next = favs.includes(id) ? favs.filter((f) => f !== id) : [...favs, id];
+  localStorage.setItem(FAV_KEY, JSON.stringify(next));
+  return next.includes(id);
+}
 
 export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }) {
   const { add } = useCart();
   const [fav, setFav] = useState(false);
   const [burst, setBurst] = useState(false);
+
+  useEffect(() => {
+    setFav(getFavs().includes(item.id));
+  }, [item.id]);
 
   const handleAdd = () => {
     add(item);
@@ -21,7 +37,7 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
       transition={{ delay: index * 0.05, duration: 0.45, ease: "easeOut" }}
-      className="group flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition hover:-translate-y-1 hover:shadow-elegant"
+      className="group flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition hover:-translate-y-1 hover:shadow-elegant"
     >
       {/* Fixed-ratio image container */}
       <div className="relative w-full overflow-hidden" style={{ paddingBottom: "66.66%" }}>
@@ -37,7 +53,7 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
           </span>
           <button
             aria-label="Favourite"
-            onClick={() => setFav((v) => !v)}
+            onClick={() => setFav(toggleFavStorage(item.id))}
             className="grid h-9 w-9 place-items-center rounded-full bg-background/80 backdrop-blur transition hover:scale-110"
           >
             <Heart className={`h-4 w-4 transition ${fav ? "fill-primary text-primary" : "text-foreground"}`} />

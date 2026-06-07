@@ -12,8 +12,8 @@ interface LoginProps {
 export function Login({ onSuccess }: LoginProps) {
   const { login } = useAuth();
   const [role, setRole] = useState<OwnerRole>("admin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("sam@gmail.com");
+  const [password, setPassword] = useState("admin@123");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -75,7 +75,11 @@ export function Login({ onSuccess }: LoginProps) {
               {(["admin", "delivery"] as OwnerRole[]).map((r) => (
                 <button
                   key={r}
-                  onClick={() => { setRole(r); setErr(null); setEmail(""); setPassword(""); }}
+                  onClick={() => {
+                    if (r === "admin") { setEmail("sam@gmail.com"); setPassword("admin@123"); }
+                    else { setEmail(""); setPassword(""); }
+                    setRole(r); setErr(null);
+                  }}
                   className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition ${
                     role === r ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
                   }`}
@@ -151,14 +155,7 @@ export function Login({ onSuccess }: LoginProps) {
               </motion.form>
             </AnimatePresence>
 
-            {/* Credentials hint */}
-            <div className="mt-5 rounded-2xl border border-dashed border-border p-4 text-xs text-muted-foreground">
-              <div className="mb-1.5 font-semibold text-foreground">Login credentials:</div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2"><ShieldCheck className="h-3 w-3 text-amber-500" /> Admin: sam@gmail.com / admin@123</div>
-                <div className="flex items-center gap-2"><Bike className="h-3 w-3 text-amber-500" /> Agent: agent@gmail.com / agent@123</div>
-              </div>
-            </div>
+
           </div>
         </motion.div>
       </div>

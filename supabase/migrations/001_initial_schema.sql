@@ -97,7 +97,14 @@ create policy "Admins can update order status"
   );
 
 -- Enable realtime for orders
-alter publication supabase_realtime add table public.orders;
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'orders'
+  ) then
+    alter publication supabase_realtime add table public.orders;
+  end if;
+end $$;
 
 
 -- 3. BULK ORDERS
@@ -151,12 +158,30 @@ create table if not exists public.menu_items (
 
 alter table public.menu_items enable row level security;
 
+-- Allow everyone (logged-in AND anonymous/public) to read available menu items
 create policy "Anyone can read available menu items"
   on public.menu_items for select
+  to anon, authenticated
   using (available = true);
 
-create policy "Admins can manage menu items"
-  on public.menu_items for all
+-- Admins can insert/update/delete menu items
+create policy "Admins can insert menu items"
+  on public.menu_items for insert
+  to authenticated
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  );
+
+create policy "Admins can update menu items"
+  on public.menu_items for update
+  to authenticated
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  );
+
+create policy "Admins can delete menu items"
+  on public.menu_items for delete
+  to authenticated
   using (
     exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
   );

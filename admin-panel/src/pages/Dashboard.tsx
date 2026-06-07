@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
-import { MENU, type FoodItem } from "@/lib/menu-data";
+import { type FoodItem } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, STATUS_FLOW, type OrderStatus } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -37,24 +37,59 @@ function StatusPill({ s }: { s: string }) {
 }
 
 /* ─── Dashboard ───────────────────────────────────────────── */
-export function Dashboard() {
-  const [items, setItems] = useState<FoodItem[]>(MENU);
+type AdminTab = "dashboard" | "agents";
+
+export function Dashboard({ onNavigate }: { onNavigate?: (tab: AdminTab) => void }) {
+  const [items, setItems] = useState<FoodItem[]>([]);
   const [editing, setEditing] = useState<FoodItem | null>(null);
+  const [saving, setSaving] = useState(false);
   const liveOrders = useOrders();
   const [bulkOrders, setBulkOrders] = useState<
     { id: string; name: string; people: number; date: string; status: string }[]
   >([]);
 
+  const loadMenu = useCallback(async () => {
+    const { data } = await (supabase.from("menu_items") as any)
+      .select("id,name,description,price,rating,category,veg,image,badge,available")
+      .order("created_at", { ascending: true });
+    if (data) setItems(data as FoodItem[]);
+  }, []);
+
   useEffect(() => {
+    loadMenu();
+
+    const channel = supabase
+      .channel("admin-menu-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, loadMenu)
+      .subscribe();
+
     supabase
       .from("bulk_orders")
       .select("id,name,people,date,status")
       .order("created_at", { ascending: false })
       .limit(10)
-      .then(({ data }) => {
-        if (data) setBulkOrders(data);
-      });
-  }, []);
+      .then(({ data }) => { if (data) setBulkOrders(data); });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [loadMenu]);
+
+  async function saveItem() {
+    if (!editing) return;
+    setSaving(true);
+    const isNew = editing.id === "new";
+    const payload = {
+      ...editing,
+      id: isNew ? `item-${Date.now()}` : editing.id,
+      available: true,
+    };
+    await (supabase.from("menu_items") as any).upsert(payload);
+    setSaving(false);
+    setEditing(null);
+  }
+
+  async function deleteItem(id: string) {
+    await (supabase.from("menu_items") as any).delete().eq("id", id);
+  }
 
   const stats = [
     {
@@ -69,7 +104,7 @@ export function Dashboard() {
   ];
 
   return (
-    <AdminShell>
+    <AdminShell activeTab="dashboard" onNavigate={onNavigate}>
       <section className="mx-auto max-w-7xl px-4 py-10 md:px-6">
         {/* Page header */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -229,8 +264,9 @@ export function Dashboard() {
               </button>
             </div>
 
+            <div className="max-h-[480px] overflow-y-auto pr-1">
             <div className="grid gap-3 sm:grid-cols-2">
-              {items.slice(0, 8).map((it) => (
+              {items.map((it) => (
                 <div
                   key={it.id}
                   className="flex items-center gap-3 rounded-2xl border border-border p-2"
@@ -253,7 +289,7 @@ export function Dashboard() {
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
+                    onClick={() => deleteItem(it.id)}
                     className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-destructive hover:bg-destructive/10 transition"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -261,12 +297,7 @@ export function Dashboard() {
                 </div>
               ))}
             </div>
-
-            {items.length > 8 && (
-              <p className="mt-3 text-xs text-center text-muted-foreground">
-                + {items.length - 8} more items
-              </p>
-            )}
+            </div>
           </div>
 
           {/* Bulk bookings */}
@@ -373,17 +404,11 @@ export function Dashboard() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    setItems((prev) =>
-                      editing.id === "new"
-                        ? [{ ...editing, id: `n${Date.now()}` }, ...prev]
-                        : prev.map((p) => (p.id === editing.id ? editing : p))
-                    );
-                    setEditing(null);
-                  }}
-                  className="flex-1 rounded-full gradient-primary py-2.5 text-sm font-semibold text-primary-foreground"
+                  onClick={saveItem}
+                  disabled={saving}
+                  className="flex-1 rounded-full gradient-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                 >
-                  Save
+                  {saving ? "Saving…" : "Save"}
                 </button>
               </div>
             </motion.div>

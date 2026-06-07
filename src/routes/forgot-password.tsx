@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { CheckCircle2, Loader2, Lock, Mail } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle2, Loader2, Lock, Mail, MailCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { AuthShell } from "@/components/site/AuthShell";
 import { Field } from "./login";
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/forgot-password")({
   head: () => ({ meta: [{ title: "Reset password — SAM Foods" }] }),
 });
 
-type Step = "email" | "new-password" | "done";
+type Step = "email" | "check-inbox" | "new-password" | "done";
 
 function ForgotPage() {
   const [step, setStep] = useState<Step>("email");
@@ -31,13 +31,25 @@ function ForgotPage() {
         redirectTo: `${window.location.origin}/forgot-password`,
       });
       if (error) throw new Error(error.message);
-      setStep("new-password");
+      // Show "check your email" screen — don't jump to password form yet
+      setStep("check-inbox");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to send reset email.");
     } finally {
       setLoading(false);
     }
   };
+
+  // Listen for Supabase PASSWORD_RECOVERY event — only fired after user
+  // clicks the reset link in their email, giving us a valid session to update
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setStep("new-password");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const updatePassword = async () => {
     setErr(null);
@@ -67,9 +79,25 @@ function ForgotPage() {
           <p className="text-center text-sm text-muted-foreground">Remembered? <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link></p>
         </motion.div>
       )}
+      {step === "check-inbox" && (
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 text-center">
+          <MailCheck className="mx-auto h-16 w-16 text-primary" />
+          <div>
+            <h2 className="font-[Fraunces] text-2xl font-bold">Check your inbox</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              We sent a reset link to <b className="text-foreground">{email}</b>.<br />
+              Click the link in the email — this page will update automatically.
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Didn't get it?{" "}
+            <button onClick={() => setStep("email")} className="font-semibold text-primary hover:underline">Try again</button>
+          </p>
+        </motion.div>
+      )}
       {step === "new-password" && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-          <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">Reset link sent to <b>{email}</b>. Click the link in your email, then set your new password below.</p>
+          <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">You're verified! Set your new password below.</p>
           <Field icon={<Lock className="h-4 w-4" />} type="password" placeholder="New password" value={pw} onChange={setPw} />
           <Field icon={<Lock className="h-4 w-4" />} type="password" placeholder="Confirm new password" value={cpw} onChange={setCpw} />
           {err && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>}
