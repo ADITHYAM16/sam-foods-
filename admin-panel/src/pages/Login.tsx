@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Loader2, Mail, Lock, ChefHat, ShieldCheck, Bike } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, ShieldCheck, Bike } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 type OwnerRole = "admin" | "delivery";
@@ -45,8 +45,8 @@ export function Login({ onSuccess }: LoginProps) {
       {/* Top bar */}
       <div className="flex h-16 items-center justify-between border-b border-border px-6">
         <div className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl gradient-primary shadow-glow">
-            <ChefHat className="h-5 w-5 text-primary-foreground" />
+          <span className="grid h-9 w-9 place-items-center rounded-full overflow-hidden shadow-glow">
+            <img src="/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
           </span>
           <span className="font-[Fraunces] text-xl font-bold">
             SAM <span className="text-gradient">Owner Portal</span>

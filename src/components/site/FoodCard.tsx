@@ -45,8 +45,15 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
           src={item.image}
           alt={item.name}
           loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110"
+          className={`absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110 ${item.sold_out ? "brightness-50" : ""}`}
         />
+        {item.sold_out && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="rounded-full border-2 border-white/80 bg-black/60 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-white backdrop-blur">
+              Sold Out
+            </span>
+          </div>
+        )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
           <span className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold backdrop-blur ${item.veg ? "border-emerald-600/50 bg-emerald-50/70 text-emerald-700" : "border-rose-600/50 bg-rose-50/70 text-rose-700"}`}>
             <span className={`h-2 w-2 rounded-full ${item.veg ? "bg-emerald-600" : "bg-rose-600"}`} /> {item.veg ? "VEG" : "NON-VEG"}
@@ -80,26 +87,30 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
             <div className="text-base font-bold md:text-xl">₹{item.price}</div>
           </div>
 
-          {/* Add button with click burst */}
+          {/* Add button */}
           <div className="relative">
-            <motion.button
-              onClick={handleAdd}
-              whileTap={{ scale: 0.82 }}
-              className="relative inline-flex items-center gap-1 overflow-hidden rounded-full gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant md:gap-1.5 md:px-4 md:py-2 md:text-sm"
-            >
-              <Plus className="h-3 w-3 md:h-4 md:w-4" /> Add
-              {/* ripple */}
-              {burst && (
-                <motion.span
-                  initial={{ scale: 0, opacity: 0.6 }}
-                  animate={{ scale: 3.5, opacity: 0 }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                  className="pointer-events-none absolute inset-0 rounded-full bg-white"
-                />
-              )}
-            </motion.button>
-            {/* floating +1 */}
-            {burst && (
+            {item.sold_out ? (
+              <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground md:px-4 md:py-2">
+                Sold Out
+              </span>
+            ) : (
+              <motion.button
+                onClick={handleAdd}
+                whileTap={{ scale: 0.82 }}
+                className="relative inline-flex items-center gap-1 overflow-hidden rounded-full gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant md:gap-1.5 md:px-4 md:py-2 md:text-sm"
+              >
+                <Plus className="h-3 w-3 md:h-4 md:w-4" /> Add
+                {burst && (
+                  <motion.span
+                    initial={{ scale: 0, opacity: 0.6 }}
+                    animate={{ scale: 3.5, opacity: 0 }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="pointer-events-none absolute inset-0 rounded-full bg-white"
+                  />
+                )}
+              </motion.button>
+            )}
+            {burst && !item.sold_out && (
               <motion.span
                 key={Date.now()}
                 initial={{ opacity: 1, y: 0, scale: 1 }}

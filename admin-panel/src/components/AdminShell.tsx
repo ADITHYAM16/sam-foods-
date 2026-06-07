@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ChefHat, ExternalLink, LayoutDashboard, LogOut, Moon, Sun, Users } from "lucide-react";
+import { ExternalLink, LayoutDashboard, LogOut, Moon, Sun, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 type AdminTab = "dashboard" | "agents";
@@ -44,8 +44,8 @@ export function AdminShell({ children, activeTab, onNavigate }: AdminShellProps)
           <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 md:px-6">
             {/* Logo */}
             <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-xl gradient-primary shadow-glow">
-                <ChefHat className="h-5 w-5 text-primary-foreground" />
+              <span className="grid h-9 w-9 place-items-center rounded-full overflow-hidden shadow-glow">
+                <img src="/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
               </span>
               <div className="leading-tight">
                 <div className="font-[Fraunces] text-lg font-bold tracking-tight">

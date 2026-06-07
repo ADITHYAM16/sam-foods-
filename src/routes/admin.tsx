@@ -8,7 +8,7 @@ import {
   Smartphone, Filter, RefreshCw, Tag,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { type FoodItem, CATEGORIES, MENU } from "@/lib/menu-data";
+import { type FoodItem, CATEGORIES } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, STATUS_FLOW, type OrderStatus } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -195,7 +195,7 @@ function useAdminMenu() {
         throw new Error("Insert blocked by database policy. Check Supabase RLS policies for menu_items.");
       }
       // Add to list immediately
-      setItems(prev => [...prev, data as FoodItem]);
+      setItems(prev => [...prev, { ...(data as any), badge: (data as any).badge ?? undefined } as FoodItem]);
     } else {
       const { error } = await (supabase.from("menu_items") as any)
         .update(payload)
@@ -204,7 +204,7 @@ function useAdminMenu() {
         console.error("[AdminMenu] update error:", error);
         throw new Error(error.message);
       }
-      setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...payload } : p));
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...payload, badge: payload.badge ?? undefined } : p));
     }
     // Re-fetch to confirm DB state
     await load();

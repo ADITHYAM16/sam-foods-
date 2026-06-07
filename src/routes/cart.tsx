@@ -1,11 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Minus, Plus, Tag, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, User, LogIn } from "lucide-react";
-import { useState } from "react";
+import { Minus, Plus, Tag, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, User, LogIn, MapPin, Navigation, Clock, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
-import { placeOrder } from "@/lib/orders-store";
+import { useLocation } from "@/lib/location-context";
+import { submitOrderRequest } from "@/lib/orders-store";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/cart")({
   component: CartPage,
@@ -37,6 +39,7 @@ function loadRazorpay(): Promise<boolean> {
 function CartPage() {
   const { items, setQty, remove, subtotal, delivery, gst, total, clear } = useCart();
   const { user } = useAuth();
+  const { saved, active, gpsLoading, fetchGPS } = useLocation();
   const navigate = useNavigate();
 
   const [coupon, setCoupon] = useState("");
@@ -45,12 +48,41 @@ function CartPage() {
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
 
   const [guestName, setGuestName] = useState("");
-  const [room, setRoom] = useState("");
+  const [location, setLocation] = useState(active?.address ?? "");
+  const [manualLocation, setManualLocation] = useState("");
+  const [locationMode, setLocationMode] = useState<"saved" | "manual">(active ? "saved" : "manual");
   const [whenMode, setWhenMode] = useState<"asap" | "schedule">("asap");
   const [time, setTime] = useState("");
   const [payMethod, setPayMethod] = useState<"cod" | "gpay">("cod");
   const [orderErr, setOrderErr] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [requestStatus, setRequestStatus] = useState<"waiting" | "denied" | null>(null);
+
+  // Listen for admin accept/deny on the request
+  useEffect(() => {
+    if (!requestId) return;
+    const channel = supabase
+      .channel(`request-${requestId}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "order_requests", filter: `id=eq.${requestId}` },
+        (payload) => {
+          const s = (payload.new as any).status;
+          if (s === "accepted") {
+            const orderId = (payload.new as any).order_id;
+            clear();
+            supabase.removeChannel(channel);
+            navigate({ to: "/track", search: { orderId } });
+          } else if (s === "denied") {
+            setRequestStatus("denied");
+            supabase.removeChannel(channel);
+          }
+        }
+      ).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [requestId, clear, navigate]);
+
+  const deliveryLocation = locationMode === "saved" ? location : manualLocation.trim();
 
   const applyCoupon = () => {
     const code = coupon.trim().toUpperCase();
@@ -80,15 +112,25 @@ function CartPage() {
   const checkout = async () => {
     setOrderErr(null);
     if (!user && !guestName.trim()) return setOrderErr("Please enter your name.");
-    if (!room.trim()) return setOrderErr("Please enter your room number.");
+    if (!deliveryLocation) return setOrderErr("Please enter your delivery location.");
     if (whenMode === "schedule" && !time) return setOrderErr("Pick a delivery time.");
     setPlacing(true);
+
+    const orderPayload = {
+      user_id: user?.id ?? null,
+      customer: customerName,
+      email: customerEmail,
+      room: deliveryLocation,
+      deliveryTime: whenMode === "asap" ? "ASAP" : time,
+      items, subtotal, delivery_fee: delivery, gst,
+      total: finalTotal, discount,
+      payment_method: payMethod as "cod" | "gpay",
+    };
 
     try {
       if (payMethod === "gpay") {
         const ok = await loadRazorpay();
-        if (!ok) { setOrderErr("Failed to load payment gateway. Try again."); setPlacing(false); return; }
-
+        if (!ok) { setOrderErr("Failed to load payment gateway."); setPlacing(false); return; }
         await new Promise<void>((resolve, reject) => {
           const rzp = new window.Razorpay({
             key: import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -97,31 +139,18 @@ function CartPage() {
             name: "SAM Foods",
             description: "Food order payment",
             method: { upi: true, card: false, netbanking: false, wallet: false },
-            config: {
-              display: {
-                blocks: { upi: { name: "Pay via GPay / UPI", instruments: [{ method: "upi" }] } },
-                sequence: ["block.upi"],
-                preferences: { show_default_blocks: false },
-              },
-            },
+            config: { display: { blocks: { upi: { name: "Pay via GPay / UPI", instruments: [{ method: "upi" }] } }, sequence: ["block.upi"], preferences: { show_default_blocks: false } } },
             prefill: { name: customerName, email: customerEmail ?? "", contact: "" },
             theme: { color: "#c2440f" },
             handler: async (response: { razorpay_payment_id: string; razorpay_order_id?: string }) => {
               try {
-                const order = await placeOrder({
-                  user_id: user?.id ?? null,
-                  customer: customerName,
-                  email: customerEmail,
-                  room: room.trim(),
-                  deliveryTime: whenMode === "asap" ? "ASAP" : time,
-                  items, subtotal, delivery_fee: delivery, gst,
-                  total: finalTotal, discount,
-                  payment_method: "gpay",
+                const req = await submitOrderRequest({
+                  ...orderPayload,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_order_id: response.razorpay_order_id ?? null,
                 });
-                clear();
-                navigate({ to: "/track", search: { orderId: order.id } });
+                setRequestId(req.id);
+                setRequestStatus("waiting");
                 resolve();
               } catch (e) { reject(e); }
             },
@@ -130,21 +159,12 @@ function CartPage() {
           rzp.open();
         });
       } else {
-        const order = await placeOrder({
-          user_id: user?.id ?? null,
-          customer: customerName,
-          email: customerEmail,
-          room: room.trim(),
-          deliveryTime: whenMode === "asap" ? "ASAP" : time,
-          items, subtotal, delivery_fee: delivery, gst,
-          total: finalTotal, discount,
-          payment_method: "cod",
-        });
-        clear();
-        navigate({ to: "/track", search: { orderId: order.id } });
+        const req = await submitOrderRequest(orderPayload);
+        setRequestId(req.id);
+        setRequestStatus("waiting");
       }
     } catch (e) {
-      setOrderErr(e instanceof Error ? e.message : "Failed to place order. Please try again.");
+      setOrderErr(e instanceof Error ? e.message : "Failed to place order.");
     } finally {
       setPlacing(false);
     }
@@ -287,15 +307,69 @@ function CartPage() {
                 </div>
               </div>
 
-              {/* Room number */}
+              {/* Delivery Location */}
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Room number</label>
-                <input
-                  value={room}
-                  onChange={e => setRoom(e.target.value)}
-                  placeholder="e.g. 305"
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
-                />
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery location</label>
+
+                {/* Toggle saved vs manual */}
+                <div className="mb-2 grid grid-cols-2 gap-1 rounded-full border border-border bg-background p-1 text-xs font-semibold">
+                  <button type="button" onClick={() => setLocationMode("saved")}
+                    className={`rounded-full py-1.5 transition ${locationMode === "saved" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                    Saved
+                  </button>
+                  <button type="button" onClick={() => setLocationMode("manual")}
+                    className={`rounded-full py-1.5 transition ${locationMode === "manual" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                    Enter manually
+                  </button>
+                </div>
+
+                {locationMode === "saved" ? (
+                  saved.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {saved.map((a) => (
+                        <button key={a.id} type="button"
+                          onClick={() => setLocation(a.address)}
+                          className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                            location === a.address
+                              ? "border-primary bg-primary/5"
+                              : "border-border bg-background hover:bg-accent"
+                          }`}>
+                          <MapPin className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${location === a.address ? "text-primary" : "text-muted-foreground"}`} />
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold">{a.label}</div>
+                            <div className="truncate text-xs text-muted-foreground">{a.address}</div>
+                          </div>
+                        </button>
+                      ))}
+                      {/* GPS option */}
+                      <button type="button" onClick={async () => { await fetchGPS(); }}
+                        disabled={gpsLoading}
+                        className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
+                        <Navigation className="h-3.5 w-3.5 shrink-0" />
+                        {gpsLoading ? "Fetching location…" : "Use current location"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="rounded-xl border border-dashed border-border px-3 py-3 text-center text-xs text-muted-foreground">
+                        No saved addresses.{" "}
+                        <button type="button" onClick={() => setLocationMode("manual")} className="font-semibold text-primary underline">Enter manually</button>
+                      </p>
+                      <button type="button" onClick={fetchGPS} disabled={gpsLoading}
+                        className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
+                        <Navigation className="h-3.5 w-3.5 shrink-0" />
+                        {gpsLoading ? "Fetching location…" : "Use current location"}
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <input
+                    value={manualLocation}
+                    onChange={e => setManualLocation(e.target.value)}
+                    placeholder="e.g. Room 305, Block A, 2nd floor"
+                    className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+                  />
+                )}
               </div>
 
               {/* Delivery time */}
@@ -330,6 +404,51 @@ function CartPage() {
           </div>
         )}
       </section>
+
+      {/* ── Waiting for admin modal ── */}
+      <AnimatePresence>
+        {requestStatus === "waiting" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 text-center shadow-elegant">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-amber-500/10">
+                <Clock className="h-8 w-8 text-amber-500 animate-pulse" />
+              </div>
+              <h3 className="font-[Fraunces] text-2xl font-black">Waiting for kitchen</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Your order request has been sent to SAM kitchen. Hang tight — the chef will confirm shortly!</p>
+              <div className="mt-4 flex items-center justify-center gap-1.5">
+                {[0,1,2].map(i => (
+                  <motion.span key={i} className="h-2 w-2 rounded-full bg-amber-500"
+                    animate={{ scale: [1, 1.4, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.2 }} />
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Denied modal ── */}
+      <AnimatePresence>
+        {requestStatus === "denied" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-sm rounded-3xl border border-destructive/30 bg-card p-8 text-center shadow-elegant">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-destructive/10">
+                <X className="h-8 w-8 text-destructive" />
+              </div>
+              <h3 className="font-[Fraunces] text-2xl font-black">Food sold out 😔</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Sorry, the kitchen is unable to fulfil your order right now. Please come back tomorrow for fresh dishes!</p>
+              <button onClick={() => { setRequestStatus(null); setRequestId(null); }}
+                className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
+                Back to cart
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </SiteShell>
   );
 }

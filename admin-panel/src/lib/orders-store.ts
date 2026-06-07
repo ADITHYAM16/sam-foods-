@@ -6,7 +6,7 @@ export interface CartItem extends FoodItem {
   qty: number;
 }
 
-export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered";
+export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered" | "Cancelled";
 
 export interface Order {
   id: string;
@@ -22,6 +22,12 @@ export interface Order {
   total: number;
   discount: number;
   status: OrderStatus;
+  payment_method?: "cod" | "gpay";
+  payment_status?: "pending" | "paid" | "failed";
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
+  cancelled_at?: string | null;
+  delivery_agent_id?: string | null;
   created_at: string;
 }
 
@@ -69,8 +75,44 @@ export async function placeOrder(o: {
   return { ...data, items: data.items as unknown as CartItem[], delivery_time: data.delivery_time };
 }
 
+export async function assignNearestAgent(orderId: string): Promise<void> {
+  try {
+    // Get all delivery agents
+    const { data: agents } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "delivery");
+
+    if (!agents || agents.length === 0) return;
+
+    // Count active orders per agent
+    const { data: activeOrders } = await (supabase.from("orders") as any)
+      .select("delivery_agent_id")
+      .in("status", ["Placed", "Preparing", "Ready", "Out for delivery"])
+      .not("delivery_agent_id", "is", null);
+
+    const loadMap: Record<string, number> = {};
+    agents.forEach((a) => { loadMap[a.id] = 0; });
+    (activeOrders ?? []).forEach((o: any) => {
+      if (o.delivery_agent_id && loadMap[o.delivery_agent_id] !== undefined) {
+        loadMap[o.delivery_agent_id]++;
+      }
+    });
+
+    // Pick agent with fewest active orders
+    const leastBusy = Object.entries(loadMap).sort((a, b) => a[1] - b[1])[0];
+    if (!leastBusy) return;
+
+    await (supabase.from("orders") as any)
+      .update({ delivery_agent_id: leastBusy[0] })
+      .eq("id", orderId);
+  } catch (e) {
+    console.error("[assignNearestAgent] Error:", e);
+  }
+}
+
 export async function updateOrderStatus(id: string, status: OrderStatus) {
-  const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+  const { error } = await (supabase.from("orders") as any).update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -86,29 +128,20 @@ export function useOrders(): Order[] {
   const [list, setList] = useState<Order[]>([]);
 
   useEffect(() => {
-    // Initial fetch
-    supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setList(data.map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-      });
+    const fetch = () => {
+      (supabase.from("orders") as any)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .then(({ data }: any) => {
+          if (data) setList(data.map((o: any) => ({ ...o, items: o.items as unknown as CartItem[] })));
+        });
+    };
 
-    // Real-time subscription
+    fetch();
     const channel = supabase
       .channel("orders-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
-        supabase
-          .from("orders")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .then(({ data }) => {
-            if (data) setList(data.map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
-          });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetch)
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 

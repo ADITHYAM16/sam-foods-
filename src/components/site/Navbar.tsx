@@ -205,8 +205,8 @@ export function Navbar() {
 
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 shrink-0 md:ml-0 ml-1">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-white shadow-glow overflow-hidden">
-                <img src="/src/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
+              <span className="grid h-9 w-9 place-items-center rounded-full overflow-hidden shadow-glow">
+                <img src="/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
               </span>
               <div className="leading-tight">
                 <div className="font-[Fraunces] text-base font-bold tracking-tight md:text-lg">SAM <span className="text-gradient">Foods</span></div>

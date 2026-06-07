@@ -11,7 +11,7 @@ export function useMenu() {
     setLoading(true);
     try {
       const { data, error } = await (supabase.from("menu_items") as any)
-        .select("id,name,description,price,rating,category,veg,image,badge,available")
+        .select("id,name,description,price,rating,category,veg,image,badge,available,sold_out")
         .eq("available", true)
         .order("created_at", { ascending: true });
 

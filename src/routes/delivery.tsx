@@ -165,14 +165,30 @@ function DeliveryPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col gap-2">
-                      <a
-                        href={`https://maps.google.com/?q=Room+${o.room}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        onClick={() => {
+                          const dest = encodeURIComponent(o.room);
+                          if (!navigator.geolocation) {
+                            window.open(`https://www.google.com/maps/dir//${dest}`, "_blank");
+                            return;
+                          }
+                          navigator.geolocation.getCurrentPosition(
+                            ({ coords }) => {
+                              window.open(
+                                `https://www.google.com/maps/dir/${coords.latitude},${coords.longitude}/${dest}`,
+                                "_blank"
+                              );
+                            },
+                            () => {
+                              window.open(`https://www.google.com/maps/dir//${dest}`, "_blank");
+                            },
+                            { enableHighAccuracy: true, timeout: 8000 }
+                          );
+                        }}
                         className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent"
                       >
                         <Navigation className="h-3.5 w-3.5" /> Navigate
-                      </a>
+                      </button>
                       <button
                         onClick={() => updateOrderStatus(
                           o.id,

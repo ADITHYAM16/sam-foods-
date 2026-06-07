@@ -6,7 +6,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered";
+export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered" | "Cancelled";
+          export type PaymentMethod = "cod" | "gpay";
+          export type PaymentStatus = "pending" | "paid" | "failed";
 export type UserRole = "customer" | "admin" | "delivery";
 
 export type Database = {
@@ -55,6 +57,12 @@ export type Database = {
           total: number
           discount: number
           status: OrderStatus
+          payment_method: "cod" | "gpay"
+          payment_status: "pending" | "paid" | "failed"
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          cancelled_at: string | null
+          delivery_agent_id: string | null
           created_at: string
         }
         Insert: {
@@ -71,10 +79,22 @@ export type Database = {
           total: number
           discount?: number
           status?: OrderStatus
+          payment_method?: "cod" | "gpay"
+          payment_status?: "pending" | "paid" | "failed"
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          cancelled_at?: string | null
+          delivery_agent_id?: string | null
           created_at?: string
         }
         Update: {
           status?: OrderStatus
+          payment_method?: "cod" | "gpay"
+          payment_status?: "pending" | "paid" | "failed"
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          cancelled_at?: string | null
+          delivery_agent_id?: string | null
         }
       }
       bulk_orders: {
@@ -108,7 +128,30 @@ export type Database = {
           status?: string
         }
       }
-      menu_items: {
+      delivery_agents: {
+        Row: {
+          id: string
+          name: string
+          email: string
+          phone: string | null
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id: string
+          name: string
+          email: string
+          phone?: string | null
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          name?: string
+          email?: string
+          phone?: string | null
+          active?: boolean
+        }
+      }
         Row: {
           id: string
           name: string

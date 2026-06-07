@@ -87,6 +87,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      { rel: "icon", type: "image/jpeg", href: "/logo.png.jpeg" },
       {
         rel: "stylesheet",
         href: appCss,

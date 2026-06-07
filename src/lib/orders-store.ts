@@ -34,6 +34,85 @@ export const STATUS_FLOW: OrderStatus[] = [
   "Delivered",
 ];
 
+export interface OrderRequest {
+  id: string;
+  user_id?: string | null;
+  customer: string;
+  email?: string | null;
+  room: string;
+  delivery_time: string;
+  items: CartItem[];
+  subtotal: number;
+  delivery_fee: number;
+  gst: number;
+  total: number;
+  discount: number;
+  payment_method: "cod" | "gpay";
+  payment_status: "pending" | "paid" | "failed";
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
+  status: "pending" | "accepted" | "denied";
+  created_at: string;
+}
+
+// Submit order request — awaits admin approval
+export async function submitOrderRequest(o: Parameters<typeof placeOrder>[0]): Promise<OrderRequest> {
+  const { data, error } = await (supabase.from("order_requests") as any)
+    .insert({
+      user_id: o.user_id ?? null,
+      customer: o.customer,
+      email: o.email ?? null,
+      room: o.room,
+      delivery_time: o.deliveryTime,
+      items: o.items as unknown as any,
+      subtotal: o.subtotal,
+      delivery_fee: o.delivery_fee,
+      gst: o.gst,
+      total: o.total,
+      discount: o.discount,
+      payment_method: o.payment_method,
+      payment_status: o.payment_method === "gpay" ? "paid" : "pending",
+      razorpay_order_id: o.razorpay_order_id ?? null,
+      razorpay_payment_id: o.razorpay_payment_id ?? null,
+      status: "pending",
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { ...data, items: (data as any).items as CartItem[] } as OrderRequest;
+}
+
+// Assign order to nearest active agent by counting today's deliveries (least busy = nearest proxy)
+export async function assignNearestAgent(orderId: string) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  // Get all active agents
+  const { data: agents } = await (supabase.from("delivery_agents") as any)
+    .select("id")
+    .eq("active", true);
+
+  if (!agents || agents.length === 0) return;
+
+  // Count today's active deliveries per agent (least busy = assign)
+  const counts: { id: string; count: number }[] = await Promise.all(
+    (agents as { id: string }[]).map(async (a) => {
+      const { count } = await (supabase.from("orders") as any)
+        .select("id", { count: "exact", head: true })
+        .eq("delivery_agent_id", a.id)
+        .in("status", ["Ready", "Out for delivery"])
+        .gte("created_at", todayStart.toISOString());
+      return { id: a.id, count: count ?? 0 };
+    })
+  );
+
+  // Pick agent with fewest active orders
+  const least = counts.sort((a, b) => a.count - b.count)[0];
+  await (supabase.from("orders") as any)
+    .update({ delivery_agent_id: least.id })
+    .eq("id", orderId);
+}
+
 export async function placeOrder(o: {
   user_id?: string | null;
   customer: string;
