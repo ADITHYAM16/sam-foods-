@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ExternalLink, LayoutDashboard, LogOut, Moon, Sun, Users } from "lucide-react";
+import { ExternalLink, LayoutDashboard, LogOut, Moon, Sun, Users, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
-type AdminTab = "dashboard" | "agents";
+type AdminTab = "dashboard" | "agents" | "bulk-orders";
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -29,9 +29,10 @@ interface AdminShellProps {
   children: ReactNode;
   activeTab?: AdminTab;
   onNavigate?: (tab: AdminTab) => void;
+  pendingBulk?: number;
 }
 
-export function AdminShell({ children, activeTab, onNavigate }: AdminShellProps) {
+export function AdminShell({ children, activeTab, onNavigate, pendingBulk = 0 }: AdminShellProps) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -63,11 +64,12 @@ export function AdminShell({ children, activeTab, onNavigate }: AdminShellProps)
                 {([
                   { tab: "dashboard" as AdminTab, label: "Dashboard", icon: LayoutDashboard },
                   { tab: "agents" as AdminTab, label: "Agents", icon: Users },
-                ] as const).map(({ tab, label, icon: Icon }) => (
+                  { tab: "bulk-orders" as AdminTab, label: "Bulk Orders", icon: UtensilsCrossed, badge: pendingBulk },
+                ] as const).map(({ tab, label, icon: Icon, badge }) => (
                   <button
                     key={tab}
                     onClick={() => onNavigate(tab)}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                    className={`relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                       activeTab === tab
                         ? "gradient-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
@@ -75,6 +77,11 @@ export function AdminShell({ children, activeTab, onNavigate }: AdminShellProps)
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {label}
+                    {(badge ?? 0) > 0 && (
+                      <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-amber-500 text-[9px] font-black text-white">
+                        {badge}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

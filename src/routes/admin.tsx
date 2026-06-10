@@ -5,12 +5,13 @@ import {
   BarChart3, ChefHat, IndianRupee, LogOut, Pencil, Plus,
   ShoppingBag, Trash2, Users, Utensils, ShieldCheck,
   Clock, CheckCircle2, X, AlertTriangle, Banknote,
-  Smartphone, Filter, RefreshCw, Tag,
+  Smartphone, Filter, RefreshCw, Tag, EyeOff, Eye,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { type FoodItem, CATEGORIES } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, STATUS_FLOW, type OrderStatus } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveImage, resolveDescription } from "@/lib/food-image-resolver";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -59,11 +60,11 @@ function ConfirmDialog({
         </div>
         <div className="mt-5 flex gap-3">
           <button onClick={onCancel}
-            className="flex-1 rounded-full border border-border py-2.5 text-sm font-semibold hover:bg-accent">
+            className="flex-1 cursor-pointer rounded-full border border-border py-2.5 text-sm font-semibold transition hover:bg-accent hover:border-primary active:scale-95">
             Cancel
           </button>
           <button onClick={onConfirm}
-            className="flex-1 rounded-full bg-destructive py-2.5 text-sm font-semibold text-white">
+            className="flex-1 cursor-pointer rounded-full bg-destructive py-2.5 text-sm font-semibold text-white transition hover:bg-destructive/80 hover:scale-105 active:scale-95">
             Delete
           </button>
         </div>
@@ -172,12 +173,12 @@ function useAdminMenu() {
   const saveItem = async (item: FoodItem): Promise<void> => {
     const payload = {
       name: item.name,
-      description: item.description,
+      description: resolveDescription(item.description, item.category),
       price: item.price,
       rating: item.rating,
       category: item.category,
       veg: item.veg,
-      image: item.image,
+      image: resolveImage(item.name, item.image, item.category),
       badge: item.badge || null,
       available: true,
     };
@@ -221,7 +222,16 @@ function useAdminMenu() {
     load();
   };
 
-  return { items, menuLoading, saveItem, deleteItem };
+  const toggleAvailable = async (id: string, current: boolean): Promise<void> => {
+    const { error } = await (supabase.from("menu_items") as any)
+      .update({ available: !current })
+      .eq("id", id);
+    if (error) { console.error("[AdminMenu] toggle error:", error); throw new Error(error.message); }
+    setItems(prev => prev.map(p => p.id === id ? { ...p, available: !current } : p));
+    load();
+  };
+
+  return { items, menuLoading, saveItem, deleteItem, toggleAvailable };
 }
 
 // ─── Bulk Orders Hook (Supabase + realtime) ───────────────────────────────────
@@ -271,7 +281,7 @@ function AdminPage() {
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
   const liveOrders = useOrders();
-  const { items, menuLoading, saveItem, deleteItem } = useAdminMenu();
+  const { items, menuLoading, saveItem, deleteItem, toggleAvailable } = useAdminMenu();
   const { bulkOrders, updateBulkStatus } = useBulkOrders();
   const weeklyBars = useWeeklyRevenue();
   const customerCount = useCustomerCount();
@@ -304,7 +314,6 @@ function AdminPage() {
     setSaveErr(null);
     if (!editing.name.trim()) return setSaveErr("Name is required.");
     if (!editing.price || editing.price <= 0) return setSaveErr("Enter a valid price.");
-    if (!editing.image.trim()) return setSaveErr("Image URL is required.");
     setSaving(true);
     try {
       await saveItem(editing);
@@ -346,13 +355,13 @@ function AdminPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-amber-500" />
               <span className="text-xs font-semibold text-amber-600">{user.name}</span>
             </div>
-            <Link to="/" className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/" className="cursor-pointer rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:bg-accent hover:scale-105 active:scale-95">
               View Site
             </Link>
-            <button
-              onClick={() => { logout(); navigate({ to: "/owner/login" }); }}
-              className="flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20"
-            >
+          <button
+            onClick={() => { logout(); navigate({ to: "/owner/login" }); }}
+            className="flex cursor-pointer items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive transition hover:bg-destructive/20 hover:scale-105 active:scale-95"
+          >
               <LogOut className="h-3.5 w-3.5" /> Logout
             </button>
           </div>
@@ -383,7 +392,11 @@ function AdminPage() {
             { key: "bulk", label: "Bulk Bookings", icon: Users },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${activeTab === t.key ? "gradient-primary text-primary-foreground shadow-elegant" : "text-muted-foreground hover:text-foreground"}`}>
+              className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
+                activeTab === t.key
+                  ? "gradient-primary text-primary-foreground shadow-elegant"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              }`}>
               <t.icon className="h-4 w-4" />
               <span className="hidden sm:inline">{t.label}</span>
             </button>
@@ -469,7 +482,7 @@ function AdminPage() {
                           <div className="mt-3">
                             <button
                               onClick={() => updateOrderStatus(o.id, next)}
-                              className="rounded-full gradient-primary px-4 py-1.5 text-[11px] font-bold text-primary-foreground shadow-elegant"
+                              className="cursor-pointer rounded-full gradient-primary px-4 py-1.5 text-[11px] font-bold text-primary-foreground shadow-elegant transition hover:scale-105 active:scale-95"
                             >
                               → Mark as {next}
                             </button>
@@ -546,8 +559,8 @@ function AdminPage() {
                 <ChefHat className="h-5 w-5 text-primary" /> Manage Menu
               </h2>
               <button
-                onClick={() => setEditing({ id: "new", name: "", description: "", nameKey: "", descKey: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "", badge: "" })}
-                className="inline-flex items-center gap-1.5 rounded-full gradient-primary px-4 py-2 text-xs font-bold text-primary-foreground"
+                onClick={() => setEditing({ id: "new", name: "", description: "", price: 0, rating: 4.5, category: "Breakfast", veg: true, image: "", badge: "", available: true })}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full gradient-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-elegant transition hover:scale-105 hover:shadow-glow active:scale-95"
               >
                 <Plus className="h-3.5 w-3.5" /> Add item
               </button>
@@ -560,13 +573,26 @@ function AdminPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((it) => (
-                  <div key={it.id} className="flex items-center gap-3 rounded-2xl border border-border p-3">
-                    <img
-                      src={it.image || "https://placehold.co/56x56?text=IMG"}
-                      alt={it.name}
-                      className="h-14 w-14 shrink-0 rounded-xl object-cover"
-                      onError={e => { (e.target as HTMLImageElement).src = "https://placehold.co/56x56?text=IMG"; }}
-                    />
+                  <div key={it.id} className={`flex items-center gap-3 rounded-2xl border p-3 transition ${
+                    it.available === false
+                      ? "border-destructive/30 bg-destructive/5 opacity-70"
+                      : "border-border bg-card hover:border-primary/30 hover:shadow-sm"
+                  }`}>
+                    <div className="relative shrink-0">
+                      <img
+                        src={resolveImage(it.name, it.image ?? "", it.category)}
+                        alt={it.name}
+                        className={`h-14 w-14 rounded-xl object-cover transition ${
+                          it.available === false ? "grayscale" : ""
+                        }`}
+                        onError={e => { (e.target as HTMLImageElement).src = "https://placehold.co/56x56?text=IMG"; }}
+                      />
+                      {it.available === false && (
+                        <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50">
+                          <span className="text-[9px] font-bold text-white">SOLD OUT</span>
+                        </span>
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-semibold">{it.name}</span>
@@ -577,10 +603,31 @@ function AdminPage() {
                       <div className="text-xs text-muted-foreground">{it.category} · ₹{it.price}</div>
                       <div className="text-xs text-muted-foreground">⭐ {it.rating} · {it.veg ? "Veg" : "Non-veg"}</div>
                     </div>
-                    <button onClick={() => setEditing(it)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-accent">
+                    {/* Sold out / Release toggle */}
+                    <button
+                      title={it.available === false ? "Release item (make available)" : "Mark as sold out"}
+                      onClick={() => toggleAvailable(it.id, it.available !== false)}
+                      className={`grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full transition ${
+                        it.available === false
+                          ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                          : "hover:bg-amber-500/10 text-amber-500 hover:text-amber-600"
+                      }`}
+                    >
+                      {it.available === false
+                        ? <Eye className="h-3.5 w-3.5" />
+                        : <EyeOff className="h-3.5 w-3.5" />
+                      }
+                    </button>
+                    <button
+                      onClick={() => setEditing(it)}
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full transition hover:bg-accent hover:text-primary"
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => setDeleteTarget(it.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-destructive hover:bg-destructive/10">
+                    <button
+                      onClick={() => setDeleteTarget(it.id)}
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full text-destructive transition hover:bg-destructive/10 hover:scale-110"
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -638,13 +685,13 @@ function AdminPage() {
                         <div className="flex shrink-0 flex-col gap-2">
                           <button
                             onClick={() => updateBulkStatus(b.id, "Confirmed")}
-                            className="rounded-full gradient-primary px-4 py-1.5 text-xs font-bold text-primary-foreground shadow-elegant"
+                            className="cursor-pointer rounded-full gradient-primary px-4 py-1.5 text-xs font-bold text-primary-foreground shadow-elegant transition hover:scale-105 hover:shadow-glow active:scale-95"
                           >
                             ✓ Confirm
                           </button>
                           <button
                             onClick={() => updateBulkStatus(b.id, "Cancelled")}
-                            className="rounded-full border border-destructive/30 bg-destructive/10 px-4 py-1.5 text-xs font-bold text-destructive"
+                            className="cursor-pointer rounded-full border border-destructive/30 bg-destructive/10 px-4 py-1.5 text-xs font-bold text-destructive transition hover:bg-destructive/20 hover:scale-105 active:scale-95"
                           >
                             ✕ Cancel
                           </button>
@@ -674,7 +721,7 @@ function AdminPage() {
             >
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-[Fraunces] text-2xl font-bold">{editing.id === "new" ? "Add" : "Edit"} item</h3>
-                <button onClick={() => setEditing(null)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent">
+                <button onClick={() => setEditing(null)} className="grid h-8 w-8 cursor-pointer place-items-center rounded-full transition hover:bg-accent hover:rotate-90">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -731,19 +778,17 @@ function AdminPage() {
                 </div>
                 <input
                   className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
-                  placeholder="Image URL *"
+                  placeholder="Image URL (optional — auto-assigned if blank)"
                   value={editing.image}
                   onChange={e => setEditing({ ...editing, image: e.target.value })}
                 />
-                {/* Image preview */}
-                {editing.image && (
-                  <img
-                    src={editing.image}
-                    alt="preview"
-                    className="h-24 w-full rounded-xl object-cover"
-                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                  />
-                )}
+                {/* Show auto-resolved preview when no image entered */}
+                <img
+                  src={resolveImage(editing.name, editing.image, editing.category)}
+                  alt="preview"
+                  className="h-24 w-full rounded-xl object-cover"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -760,11 +805,11 @@ function AdminPage() {
               )}
 
               <div className="mt-5 flex gap-3">
-                <button onClick={() => setEditing(null)} className="flex-1 rounded-full border border-border py-2.5 text-sm font-semibold hover:bg-accent">
+                <button onClick={() => setEditing(null)} className="flex-1 cursor-pointer rounded-full border border-border py-2.5 text-sm font-semibold transition hover:bg-accent hover:border-primary active:scale-95">
                   Cancel
                 </button>
                 <button onClick={handleSaveItem} disabled={saving}
-                  className="flex-1 rounded-full gradient-primary py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+                  className="flex-1 cursor-pointer rounded-full gradient-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:scale-105 hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-60 active:scale-95">
                   {saving ? "Saving…" : "Save item"}
                 </button>
               </div>

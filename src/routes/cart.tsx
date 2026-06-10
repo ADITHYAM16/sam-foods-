@@ -48,16 +48,27 @@ function CartPage() {
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
 
   const [guestName, setGuestName] = useState("");
-  const [location, setLocation] = useState(active?.address ?? "");
+  const [selectedAddress, setSelectedAddress] = useState(active?.address ?? "");
   const [manualLocation, setManualLocation] = useState("");
-  const [locationMode, setLocationMode] = useState<"saved" | "manual">(active ? "saved" : "manual");
-  const [whenMode, setWhenMode] = useState<"asap" | "schedule">("asap");
-  const [time, setTime] = useState("");
   const [payMethod, setPayMethod] = useState<"cod" | "gpay">("cod");
   const [orderErr, setOrderErr] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [requestStatus, setRequestStatus] = useState<"waiting" | "denied" | null>(null);
+
+  const [gpsAddress, setGpsAddress] = useState("");
+  const [showManual, setShowManual] = useState(false);
+
+  // pick the active (default) address once on mount
+  useEffect(() => {
+    if (active && !selectedAddress) setSelectedAddress(active.address);
+    const cur = saved.find(a => a.label === "Current Location");
+    if (cur) {
+      setGpsAddress(cur.address);
+      if (selectedAddress === gpsAddress || !selectedAddress) setSelectedAddress(cur.address);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
 
   // Listen for admin accept/deny on the request
   useEffect(() => {
@@ -82,7 +93,7 @@ function CartPage() {
     return () => { supabase.removeChannel(channel); };
   }, [requestId, clear, navigate]);
 
-  const deliveryLocation = locationMode === "saved" ? location : manualLocation.trim();
+  const deliveryLocation = selectedAddress;
 
   const applyCoupon = () => {
     const code = coupon.trim().toUpperCase();
@@ -113,7 +124,6 @@ function CartPage() {
     setOrderErr(null);
     if (!user && !guestName.trim()) return setOrderErr("Please enter your name.");
     if (!deliveryLocation) return setOrderErr("Please enter your delivery location.");
-    if (whenMode === "schedule" && !time) return setOrderErr("Pick a delivery time.");
     setPlacing(true);
 
     const orderPayload = {
@@ -121,7 +131,7 @@ function CartPage() {
       customer: customerName,
       email: customerEmail,
       room: deliveryLocation,
-      deliveryTime: whenMode === "asap" ? "ASAP" : time,
+      deliveryTime: "ASAP",
       items, subtotal, delivery_fee: delivery, gst,
       total: finalTotal, discount,
       payment_method: payMethod as "cod" | "gpay",
@@ -309,82 +319,86 @@ function CartPage() {
 
               {/* Delivery Location */}
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery location</label>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery location</label>
 
-                {/* Toggle saved vs manual */}
-                <div className="mb-2 grid grid-cols-2 gap-1 rounded-full border border-border bg-background p-1 text-xs font-semibold">
-                  <button type="button" onClick={() => setLocationMode("saved")}
-                    className={`rounded-full py-1.5 transition ${locationMode === "saved" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>
-                    Saved
-                  </button>
-                  <button type="button" onClick={() => setLocationMode("manual")}
-                    className={`rounded-full py-1.5 transition ${locationMode === "manual" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>
-                    Enter manually
-                  </button>
-                </div>
-
-                {locationMode === "saved" ? (
-                  saved.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {saved.map((a) => (
-                        <button key={a.id} type="button"
-                          onClick={() => setLocation(a.address)}
-                          className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
-                            location === a.address
-                              ? "border-primary bg-primary/5"
-                              : "border-border bg-background hover:bg-accent"
-                          }`}>
-                          <MapPin className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${location === a.address ? "text-primary" : "text-muted-foreground"}`} />
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold">{a.label}</div>
-                            <div className="truncate text-xs text-muted-foreground">{a.address}</div>
-                          </div>
-                        </button>
-                      ))}
-                      {/* GPS option */}
-                      <button type="button" onClick={async () => { await fetchGPS(); }}
-                        disabled={gpsLoading}
-                        className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
-                        <Navigation className="h-3.5 w-3.5 shrink-0" />
-                        {gpsLoading ? "Fetching location…" : "Use current location"}
+                <div className="space-y-1.5">
+                  {/* Once GPS address is fetched and selected, show only the address */}
+                  {gpsAddress && selectedAddress === gpsAddress ? (
+                    <div className="flex items-start gap-2 rounded-xl border border-primary bg-primary/5 px-3 py-2.5">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <p className="flex-1 text-xs font-semibold text-primary break-words">{gpsAddress}</p>
+                      <button type="button" onClick={() => { setGpsAddress(""); setSelectedAddress(""); }} className="shrink-0">
+                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-1.5">
-                      <p className="rounded-xl border border-dashed border-border px-3 py-3 text-center text-xs text-muted-foreground">
-                        No saved addresses.{" "}
-                        <button type="button" onClick={() => setLocationMode("manual")} className="font-semibold text-primary underline">Enter manually</button>
-                      </p>
-                      <button type="button" onClick={fetchGPS} disabled={gpsLoading}
-                        className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
-                        <Navigation className="h-3.5 w-3.5 shrink-0" />
-                        {gpsLoading ? "Fetching location…" : "Use current location"}
-                      </button>
-                    </div>
-                  )
-                ) : (
-                  <input
-                    value={manualLocation}
-                    onChange={e => setManualLocation(e.target.value)}
-                    placeholder="e.g. Room 305, Block A, 2nd floor"
-                    className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
-                  />
-                )}
-              </div>
+                    <button type="button"
+                      disabled={gpsLoading}
+                      onClick={async () => {
+                        await fetchGPS();
+                        const cur = saved.find(a => a.label === "Current Location");
+                        const addr = cur?.address ?? "";
+                        setGpsAddress(addr);
+                        setSelectedAddress(addr);
+                        setShowManual(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
+                      <Navigation className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1 text-left">
+                        {gpsLoading ? "Fetching location…" : "Use my current location"}
+                      </span>
+                    </button>
+                  )}
 
-              {/* Delivery time */}
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery time</label>
-                <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-background p-1 text-xs font-semibold">
-                  <button type="button" onClick={() => setWhenMode("asap")}
-                    className={`rounded-full py-1.5 transition ${whenMode === "asap" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>ASAP</button>
-                  <button type="button" onClick={() => setWhenMode("schedule")}
-                    className={`rounded-full py-1.5 transition ${whenMode === "schedule" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Schedule</button>
+                  {/* Saved addresses toggle */}
+                  <button type="button"
+                    onClick={() => {
+                      const next = !showManual;
+                      setShowManual(next);
+                      if (next) { setSelectedAddress(""); setManualLocation(""); }
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${
+                      showManual
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:bg-accent"
+                    }`}>
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span className="flex-1 text-left">Saved addresses</span>
+                    {showManual && <X className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+
+                  {/* Saved addresses list — expands when toggled */}
+                  <AnimatePresence>
+                    {showManual && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden space-y-1.5 pl-1"
+                      >
+                        {saved.filter(a => a.label !== "Current Location").length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">No saved addresses found.</p>
+                        ) : (
+                          saved.filter(a => a.label !== "Current Location").map((a) => (
+                            <button key={a.id} type="button"
+                              onClick={() => { setSelectedAddress(a.address); setManualLocation(""); }}
+                              className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition ${
+                                selectedAddress === a.address
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border bg-background hover:bg-accent"
+                              }`}>
+                              <MapPin className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selectedAddress === a.address ? "text-primary" : "text-muted-foreground"}`} />
+                              <div className="min-w-0">
+                                <div className="text-xs font-semibold">{a.label}</div>
+                                <div className="truncate text-xs text-muted-foreground">{a.address}</div>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-                {whenMode === "schedule" && (
-                  <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary" />
-                )}
               </div>
 
               {orderErr && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{orderErr}</p>}

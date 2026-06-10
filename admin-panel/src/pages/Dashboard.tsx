@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
@@ -102,9 +102,9 @@ function OrderRequestAlert({ req, onAccept, onDeny }: {
 }
 
 /* ─── Dashboard ───────────────────────────────────────────── */
-type AdminTab = "dashboard" | "agents";
+type AdminTab = "dashboard" | "agents" | "bulk-orders";
 
-export function Dashboard({ onNavigate }: { onNavigate?: (tab: AdminTab) => void }) {
+export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: AdminTab) => void; pendingBulk?: number }) {
   const [items, setItems] = useState<FoodItem[]>([]);
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -113,7 +113,21 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: AdminTab) => void
     { id: string; name: string; people: number; date: string; status: string }[]
   >([]);
   const [requests, setRequests] = useState<OrderRequest[]>([]);
-  const prevReqIds = useRef<Set<string>>(new Set());
+
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      [0, 0.2].forEach((t) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 1000;
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.18);
+        osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.18);
+      });
+    } catch {}
+  }
 
   const loadMenu = useCallback(async () => {
     const { data } = await (supabase.from("menu_items") as any)
@@ -122,45 +136,98 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: AdminTab) => void
     if (data) setItems(data as FoodItem[]);
   }, []);
 
-  const loadRequests = useCallback(async () => {
-    const { data } = await (adminClient.from("order_requests") as any)
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true });
-    if (data) {
-      const mapped = (data as any[]).map(r => ({ ...r, items: r.items as { name: string; qty: number }[] }));
-      // play sound for new requests
-      mapped.forEach(r => {
-        if (!prevReqIds.current.has(r.id)) {
-          try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch {}
-        }
-      });
-      prevReqIds.current = new Set(mapped.map(r => r.id));
-      setRequests(mapped);
-    }
-  }, []);
-
   useEffect(() => {
+    // ── initial loads ──
     loadMenu();
-    loadRequests();
 
-    supabase.from("bulk_orders").select("id,name,people,date,status")
-      .order("created_at", { ascending: false }).limit(10)
-      .then(({ data }) => { if (data) setBulkOrders(data); });
+    // Load pending order requests once
+    adminClient.from("order_requests" as any).select("*")
+      .eq("status", "pending").order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) setRequests((data as any[]).map(r => ({ ...r, items: r.items as { name: string; qty: number }[] })));
+      });
 
-    const menuChannel = supabase.channel("admin-menu-changes")
+    // Load pending/accepted bulk orders once
+    supabase.from("bulk_orders" as any).select("id,name,people,date,status")
+      .in("status", ["Pending", "Accepted"]).order("created_at", { ascending: false }).limit(10)
+      .then(({ data }) => { if (data) setBulkOrders(data as any); });
+
+    // ── menu realtime (full reload is fine — menu changes are rare) ──
+    const menuCh = supabase.channel("adm-menu")
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, loadMenu)
       .subscribe();
 
-    const reqChannel = supabase.channel("admin-order-requests")
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_requests" }, loadRequests)
+    // ── order_requests realtime — IN-PLACE patch, never full reload ──
+    const reqCh = adminClient.channel("adm-order-req")
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "order_requests" },
+        ({ new: row }) => {
+          const r = row as any;
+          if (r.status !== "pending") return;
+          setRequests(prev => {
+            if (prev.some(x => x.id === r.id)) return prev;
+            playBeep();
+            return [...prev, { ...r, items: r.items as { name: string; qty: number }[] }];
+          });
+        }
+      )
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "order_requests" },
+        ({ new: row }) => {
+          const r = row as any;
+          // Remove from list if no longer pending (accepted / denied)
+          if (r.status !== "pending") {
+            setRequests(prev => prev.filter(x => x.id !== r.id));
+          } else {
+            setRequests(prev => prev.map(x => x.id === r.id ? { ...r, items: r.items } : x));
+          }
+        }
+      )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "order_requests" },
+        ({ old: row }) => {
+          setRequests(prev => prev.filter(x => x.id !== (row as any).id));
+        }
+      )
+      .subscribe();
+
+    // ── bulk_orders realtime — IN-PLACE patch ──
+    const bulkCh = supabase.channel("adm-bulk")
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "bulk_orders" },
+        ({ new: row }) => {
+          const b = row as any;
+          if (![ "Pending", "Accepted"].includes(b.status)) return;
+          setBulkOrders(prev => {
+            if (prev.some(x => x.id === b.id)) return prev;
+            return [{ id: b.id, name: b.name, people: b.people, date: b.date, status: b.status }, ...prev];
+          });
+          playBeep();
+        }
+      )
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "bulk_orders" },
+        ({ new: row }) => {
+          const b = row as any;
+          if (!["Pending", "Accepted"].includes(b.status)) {
+            setBulkOrders(prev => prev.filter(x => x.id !== b.id));
+          } else {
+            setBulkOrders(prev => prev.map(x => x.id === b.id ? { id: b.id, name: b.name, people: b.people, date: b.date, status: b.status } : x));
+          }
+        }
+      )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "bulk_orders" },
+        ({ old: row }) => { setBulkOrders(prev => prev.filter(x => x.id !== (row as any).id)); }
+      )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(menuChannel);
-      supabase.removeChannel(reqChannel);
+      supabase.removeChannel(menuCh);
+      adminClient.removeChannel(reqCh);
+      supabase.removeChannel(bulkCh);
     };
-  }, [loadMenu, loadRequests]);
+  }, [loadMenu]);
 
   async function acceptRequest(req: OrderRequest) {
     // Create real order from request
@@ -229,7 +296,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: AdminTab) => void
   ];
 
   return (
-    <AdminShell activeTab="dashboard" onNavigate={onNavigate}>
+    <AdminShell activeTab="dashboard" onNavigate={onNavigate} pendingBulk={pendingBulk}>
       <section className="mx-auto max-w-7xl px-4 py-10 md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

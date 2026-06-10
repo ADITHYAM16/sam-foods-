@@ -81,7 +81,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
           localStorage.setItem(GPS_KEY, JSON.stringify({ address, lat, lng }));
           if (user) {
-            await saveAddress("Current Location", address, lat, lng);
+            // Update existing "Current Location" row if it exists, otherwise insert
+            const existing = saved.find((a) => a.label === "Current Location");
+            if (existing) {
+              await (supabase.from("saved_addresses") as any)
+                .update({ address, lat, lng })
+                .eq("id", existing.id);
+              setSaved((prev) => prev.map((a) => a.id === existing.id ? { ...a, address, lat, lng } : a));
+            } else {
+              await saveAddress("Current Location", address, lat, lng);
+            }
           }
         } catch {
           /* ignore reverse-geocode failure */

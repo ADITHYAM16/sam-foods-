@@ -38,6 +38,7 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [gpsDone, setGpsDone] = useState(false);
 
   const set = (k: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -77,13 +78,14 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
         <div className="max-h-[70vh] overflow-y-auto p-5 space-y-5">
           {/* GPS */}
           <button
-            onClick={fetchGPS}
+            onClick={async () => { setGpsDone(false); await fetchGPS(); setGpsDone(true); }}
             disabled={gpsLoading}
             className="flex w-full items-center gap-3 rounded-2xl bg-primary/10 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-60"
           >
             <Navigation className="h-4 w-4 shrink-0" />
-            {gpsLoading ? "Fetching your location…" : "Use current location"}
+            {gpsLoading ? "Fetching your location…" : "Use my location"}
           </button>
+          {gpsDone && !gpsLoading && onClose()}
 
           {/* Saved addresses */}
           {saved.length > 0 && (

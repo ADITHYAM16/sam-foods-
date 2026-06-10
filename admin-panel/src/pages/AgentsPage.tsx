@@ -318,7 +318,7 @@ function AgentCard({ agent, onView }: { agent: Agent; onView: () => void }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────
-type AdminTab = "dashboard" | "agents";
+type AdminTab = "dashboard" | "agents" | "bulk-orders";
 
 export function AgentsPage({ onNavigate }: { onNavigate?: (tab: AdminTab) => void }) {
   const { agents, loading, reload } = useAgents();
