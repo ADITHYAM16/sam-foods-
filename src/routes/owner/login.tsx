@@ -54,13 +54,13 @@ function OwnerLoginPage() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Top bar */}
       <div className="flex h-16 items-center justify-between border-b border-border px-6">
-        <Link to="/login" className="flex items-center gap-2">
+        <Link to="/login" search={{ redirect: "/" } as any} className="flex items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-full bg-white overflow-hidden shadow-glow">
             <img src="/logo.png.jpeg" alt="SAM Foods" className="h-9 w-9 rounded-full object-cover" />
           </span>
           <span className="font-[Fraunces] text-xl font-bold">SAM <span className="text-gradient">Foods</span></span>
         </Link>
-        <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link to="/login" search={{ redirect: "/" } as any} className="text-sm text-muted-foreground hover:text-foreground">
           ← Customer login
         </Link>
       </div>

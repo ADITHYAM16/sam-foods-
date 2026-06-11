@@ -1,10 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { Bell, CheckCircle2, IndianRupee, Loader2, MapPin, Navigation, Package, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Bell, CheckCircle2, IndianRupee, Loader2, MapPin,
+  Navigation, Package, X, Check, Bike, CreditCard,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { useAuth } from "@/lib/auth-context";
-import { useDeliveryOrders, updateOrderStatus, type OrderStatus } from "@/lib/orders-store";
+import {
+  useDeliveryOrders, useDeliveryRequests,
+  respondToDeliveryRequest, updateOrderStatus, type OrderStatus,
+} from "@/lib/orders-store";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/delivery")({
   component: DeliveryPage,
@@ -27,21 +34,46 @@ function StatusPill({ s }: { s: string }) {
 function DeliveryPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { orders, loading: ordersLoading, newAlert, clearAlert } = useDeliveryOrders();
+  const { orders, loading: ordersLoading, newAlert, clearAlert } = useDeliveryOrders(user?.id);
+  const { request, order: reqOrder } = useDeliveryRequests(user?.id);
+  const [responding, setResponding] = useState(false);
+  const [deniedIds, setDeniedIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/owner/login" });
     if (!loading && user && user.role !== "delivery") navigate({ to: "/" });
   }, [user, loading, navigate]);
 
-  const activeOrders = orders.filter(o => o.status === "Ready" || o.status === "Out for delivery");
-  const deliveredOrders = orders.filter(o => o.status === "Delivered");
+  // Track previously denied agent IDs from existing denied requests for this agent
+  useEffect(() => {
+    if (!user?.id || !request?.order_id) return;
+    supabase.from("delivery_requests" as any)
+      .select("agent_id")
+      .eq("order_id", request.order_id)
+      .eq("status", "denied")
+      .then(({ data }) => {
+        if (data) setDeniedIds((data as any[]).map(r => r.agent_id));
+      });
+  }, [request?.order_id, user?.id]);
 
+  const handleRespond = async (accept: boolean) => {
+    if (!request || !user) return;
+    setResponding(true);
+    try {
+      await respondToDeliveryRequest(request.id, request.order_id, user.id, accept, deniedIds);
+    } finally {
+      setResponding(false);
+    }
+  };
+
+  const activeOrders = orders.filter(o => o.status === "Out for delivery");
+  const readyOrders = orders.filter(o => o.status === "Ready");
+  const deliveredOrders = orders.filter(o => o.status === "Delivered");
   const todayEarnings = deliveredOrders.reduce((s, o) => s + Math.round(o.total * 0.08), 0);
 
   const stats = [
     { l: "Today's Earnings", v: `₹${todayEarnings}`, i: IndianRupee, color: "text-emerald-600", bg: "bg-emerald-500/10" },
-    { l: "Active Drops", v: String(activeOrders.length), i: Package, color: "text-blue-600", bg: "bg-blue-500/10" },
+    { l: "Active Drops", v: String(activeOrders.length + readyOrders.length), i: Package, color: "text-blue-600", bg: "bg-blue-500/10" },
     { l: "Delivered Today", v: String(deliveredOrders.length), i: CheckCircle2, color: "text-purple-600", bg: "bg-purple-500/10" },
   ];
 
@@ -55,14 +87,95 @@ function DeliveryPage() {
     <SiteShell>
       <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">
 
+        {/* ── Incoming delivery request ── */}
+        <AnimatePresence>
+          {request && reqOrder && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mb-6 rounded-3xl border-2 border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 p-5 shadow-lg"
+            >
+              {/* Pulsing header */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+                </span>
+                <Bell className="h-5 w-5 text-amber-600" />
+                <span className="text-base font-bold text-amber-800 dark:text-amber-300">
+                  New Delivery Request!
+                </span>
+              </div>
+
+              {/* Order details */}
+              <div className="grid gap-3 sm:grid-cols-2 mb-4">
+                <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-white/60 dark:bg-amber-900/20 p-3">
+                  <MapPin className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-[10px] uppercase text-amber-600 font-semibold tracking-wide">Delivery Location</div>
+                    <div className="font-bold text-sm">{reqOrder.room}</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-white/60 dark:bg-amber-900/20 p-3">
+                  <CreditCard className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-[10px] uppercase text-amber-600 font-semibold tracking-wide">Payment</div>
+                    <div className="font-bold text-sm uppercase">{reqOrder.payment_method}
+                      <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                        reqOrder.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                      }`}>{reqOrder.payment_status}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-white/60 dark:bg-amber-900/20 p-3">
+                  <div className="text-[10px] uppercase text-amber-600 font-semibold tracking-wide mb-1">Items</div>
+                  <div className="space-y-0.5">
+                    {reqOrder.items.map((it, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span>{it.name}</span>
+                        <span className="text-muted-foreground">×{it.qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-white/60 dark:bg-amber-900/20 p-3">
+                  <IndianRupee className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="text-[10px] uppercase text-amber-600 font-semibold tracking-wide">Total Amount</div>
+                    <div className="text-xl font-black">₹{reqOrder.total}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Accept / Deny */}
+              <div className="flex gap-3">
+                <button
+                  disabled={responding}
+                  onClick={() => handleRespond(true)}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-60"
+                >
+                  {responding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Accept
+                </button>
+                <button
+                  disabled={responding}
+                  onClick={() => handleRespond(false)}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-destructive/40 bg-destructive/10 py-3 text-sm font-bold text-destructive hover:bg-destructive/20 transition disabled:opacity-60"
+                >
+                  <X className="h-4 w-4" /> Deny
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* New order alert banner */}
         <AnimatePresence>
           {newAlert && (
             <motion.div
-              initial={{ opacity: 0, y: -16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 shadow-sm"
+              initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
+              className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-3"
             >
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3">
@@ -71,10 +184,10 @@ function DeliveryPage() {
                 </span>
                 <Bell className="h-4 w-4 text-amber-600" />
                 <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                  New order ready — {newAlert.customer}, Room {newAlert.room} · ₹{newAlert.total}
+                  Order ready — {newAlert.customer}, {newAlert.room} · ₹{newAlert.total}
                 </span>
               </div>
-              <button onClick={clearAlert} className="grid h-6 w-6 place-items-center rounded-full hover:bg-amber-100 dark:hover:bg-amber-900">
+              <button onClick={clearAlert} className="grid h-6 w-6 place-items-center rounded-full hover:bg-amber-100">
                 <X className="h-3.5 w-3.5 text-amber-600" />
               </button>
             </motion.div>
@@ -85,16 +198,13 @@ function DeliveryPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-wider text-primary">Delivery Partner</div>
-            <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">
-              Hey {user.name.split(" ")[0]} 👋
-            </h1>
+            <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">Hey {user.name.split(" ")[0]} 👋</h1>
             <p className="mt-1 text-muted-foreground">
-              {activeOrders.length === 0
+              {activeOrders.length + readyOrders.length === 0
                 ? "No active deliveries right now."
-                : `${activeOrders.length} active deliver${activeOrders.length === 1 ? "y" : "ies"} in your zone.`}
+                : `${activeOrders.length + readyOrders.length} active deliver${activeOrders.length + readyOrders.length === 1 ? "y" : "ies"}.`}
             </p>
           </div>
-          {/* Realtime indicator */}
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-emerald-600">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
@@ -121,67 +231,60 @@ function DeliveryPage() {
         <h2 className="mt-10 font-[Fraunces] text-2xl font-bold">Active Deliveries</h2>
 
         {ordersLoading ? (
-          <div className="mt-6 flex justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : activeOrders.length === 0 ? (
+          <div className="mt-6 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        ) : (readyOrders.length === 0 && activeOrders.length === 0) ? (
           <div className="mt-4 rounded-2xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-            No active deliveries. Orders marked "Ready" by the kitchen will appear here instantly.
+            No active deliveries. Accepted orders appear here instantly.
           </div>
         ) : (
           <div className="mt-4 space-y-3">
             <AnimatePresence>
-              {activeOrders.map((o, i) => (
+              {[...readyOrders, ...activeOrders].map((o, i) => (
                 <motion.div
                   key={o.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.97 }}
                   transition={{ delay: i * 0.04 }}
-                  className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4"
+                  className={`rounded-2xl border-2 p-4 transition-colors duration-500 ${
+                    o.status === "Out for delivery"
+                      ? "border-emerald-400/40 bg-emerald-500/10"
+                      : "border-primary/30 bg-primary/5"
+                  }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">{o.id}</span>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                          Room {o.room}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">· {o.delivery_time}</span>
                         <StatusPill s={o.status} />
                       </div>
-                      <div className="mt-1 font-semibold">{o.customer} · ₹{o.total}</div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                        {o.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
-                      </div>
-                      {o.created_at && (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Ordered at {new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span className="text-sm font-semibold">{o.room}</span>
                         </div>
-                      )}
-                      <div className="mt-1 text-xs text-muted-foreground capitalize">
-                        Payment: <span className="font-medium">{o.payment_method?.toUpperCase()} · {o.payment_status}</span>
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span className="text-sm font-semibold uppercase">{o.payment_method}
+                            <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                              o.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                            }`}>{o.payment_status}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-1 text-sm font-semibold">{o.customer} · ₹{o.total}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {o.items.map(it => `${it.name} ×${it.qty}`).join(", ")}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col gap-2">
                       <button
                         onClick={() => {
                           const dest = encodeURIComponent(o.room);
-                          if (!navigator.geolocation) {
-                            window.open(`https://www.google.com/maps/dir//${dest}`, "_blank");
-                            return;
-                          }
+                          if (!navigator.geolocation) { window.open(`https://www.google.com/maps/dir//${dest}`, "_blank"); return; }
                           navigator.geolocation.getCurrentPosition(
-                            ({ coords }) => {
-                              window.open(
-                                `https://www.google.com/maps/dir/${coords.latitude},${coords.longitude}/${dest}`,
-                                "_blank"
-                              );
-                            },
-                            () => {
-                              window.open(`https://www.google.com/maps/dir//${dest}`, "_blank");
-                            },
+                            ({ coords }) => window.open(`https://www.google.com/maps/dir/${coords.latitude},${coords.longitude}/${dest}`, "_blank"),
+                            () => window.open(`https://www.google.com/maps/dir//${dest}`, "_blank"),
                             { enableHighAccuracy: true, timeout: 8000 }
                           );
                         }}
@@ -189,15 +292,22 @@ function DeliveryPage() {
                       >
                         <Navigation className="h-3.5 w-3.5" /> Navigate
                       </button>
-                      <button
-                        onClick={() => updateOrderStatus(
-                          o.id,
-                          o.status === "Ready" ? "Out for delivery" : "Delivered" as OrderStatus
-                        )}
-                        className="rounded-full gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-elegant"
-                      >
-                        {o.status === "Ready" ? "🚴 Pick up" : "✓ Mark delivered"}
-                      </button>
+                      {o.status === "Ready" && (
+                        <button
+                          onClick={() => updateOrderStatus(o.id, "Out for delivery" as OrderStatus)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-full gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-elegant"
+                        >
+                          <Bike className="h-3.5 w-3.5" /> Picked Up
+                        </button>
+                      )}
+                      {o.status === "Out for delivery" && (
+                        <button
+                          onClick={() => updateOrderStatus(o.id, "Delivered" as OrderStatus)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-elegant"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Delivered
+                        </button>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -215,15 +325,13 @@ function DeliveryPage() {
                 {deliveredOrders.map((o, i) => (
                   <motion.div
                     key={o.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                     className="flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">{o.id}</span>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Room {o.room}</span>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{o.room}</span>
                       </div>
                       <div className="mt-0.5 text-sm font-semibold">{o.customer} · ₹{o.total}</div>
                       {o.created_at && (
@@ -233,12 +341,8 @@ function DeliveryPage() {
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                        Delivered ✓
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        +₹{Math.round(o.total * 0.08)} earned
-                      </span>
+                      <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-600">Delivered ✓</span>
+                      <span className="text-xs text-muted-foreground">+₹{Math.round(o.total * 0.08)} earned</span>
                     </div>
                   </motion.div>
                 ))}

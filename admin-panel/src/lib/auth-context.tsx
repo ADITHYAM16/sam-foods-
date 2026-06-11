@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { adminClient } from "@/lib/admin-client";
 
 export type Role = "customer" | "admin" | "delivery";
 
@@ -21,193 +21,89 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const CACHE_KEY = "sam_user_cache";
 
-// Service role client — bypasses RLS for profile reads in admin panel
-function getServiceClient() {
-  return createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  );
-}
+// Service role client no longer needed here — imported from admin-client singleton
 
-function getCached(): User | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function setCached(u: User | null) {
-  if (u) localStorage.setItem(CACHE_KEY, JSON.stringify(u));
-  else localStorage.removeItem(CACHE_KEY);
-}
+const profileCache = new Map<string, User>();
 
 async function fetchProfile(id: string, email?: string): Promise<User | null> {
+  if (profileCache.has(id)) return profileCache.get(id)!;
   try {
-    const sc = getServiceClient();
-    const { data, error } = await sc.from("profiles").select("*").eq("id", id).single();
-
+    const { data, error } = await adminClient.from("profiles").select("*").eq("id", id).single();
     if (error || !data) {
-      // Profile missing — auto-create it as admin
       if (email) {
         const name = email.split("@")[0];
-        await sc.from("profiles").upsert({
-          id,
-          name,
-          email,
-          role: "admin",
-        }, { onConflict: "id" });
-        const { data: created } = await sc.from("profiles").select("*").eq("id", id).single();
+        await adminClient.from("profiles").upsert({ id, name, email, role: "admin" }, { onConflict: "id" });
+        const { data: created } = await adminClient.from("profiles").select("*").eq("id", id).single();
         if (!created) return null;
         const u: User = { id: created.id, name: created.name, email: created.email, phone: created.phone ?? undefined, role: created.role as Role };
-        setCached(u);
+        profileCache.set(id, u);
         return u;
       }
       return null;
     }
-
     const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
-    setCached(u);
+    profileCache.set(id, u);
     return u;
   } catch (e) { console.error("[Auth] Profile fetch exception:", e); return null; }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => getCached());
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 5000);
-
-    supabase.auth.getSession().then(async ({ data, error }) => {
-      if (error) console.error("[Auth] Session error:", error);
-      if (data.session?.user) {
-        // Use cache immediately, refresh in background
-        const cached = getCached();
-        if (cached) setUser(cached);
-        setLoading(false);
-        // Refresh profile in background
-        fetchProfile(data.session.user.id, data.session.user.email ?? undefined).then(p => { if (p) setUser(p); });
-      } else {
-        setCached(null);
-        setUser(null);
-        setLoading(false);
-      }
-      clearTimeout(timeout);
-    });
-
+    // onAuthStateChange fires INITIAL_SESSION synchronously from localStorage
+    // on page load — this is the single source of truth, no getSession() needed.
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const cached = getCached();
-        if (cached && cached.id === session.user.id) setUser(cached);
-        fetchProfile(session.user.id, session.user.email ?? undefined).then(p => { if (p) setUser(p); });
+        const su = session.user;
+        const profile = await fetchProfile(su.id, su.email ?? undefined);
+        setUser(profile);
       } else {
-        setCached(null);
         setUser(null);
       }
+      setLoading(false);
     });
 
-    return () => { clearTimeout(timeout); sub.subscription.unsubscribe(); };
+    return () => { sub.subscription.unsubscribe(); };
   }, []);
 
   const login: AuthContextValue["login"] = async (email, password) => {
-    try {
-      console.log("[Auth] Attempting login for:", email);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email: email.trim(), 
-        password 
-      });
-      
-      if (error) {
-        console.error("[Auth] Login error:", error);
-        throw new Error(error.message);
-      }
-      
-      if (!data.user) {
-        throw new Error("Login failed - no user returned");
-      }
- 
-      console.log("[Auth] Login successful, fetching profile...");
-      const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim());
-      
-      if (!profile) {
-        throw new Error("Could not load profile. Please try again.");
-      }
-
-      console.log("[Auth] Profile loaded:", profile.email, profile.role);
-      setUser(profile);
-      return profile;
-    } catch (e) {
-      console.error("[Auth] Login exception:", e);
-      throw e;
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Login failed - no user returned");
+    profileCache.delete(data.user.id); // bust cache so fresh profile is fetched
+    const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim());
+    if (!profile) throw new Error("Could not load profile. Please try again.");
+    setUser(profile);
+    return profile;
   };
 
   const register: AuthContextValue["register"] = async ({ name, email, phone, password, role }) => {
-    try {
-      console.log("[Auth] Attempting registration for:", email);
-      
-      const { data, error } = await supabase.auth.signUp({ 
-        email: email.trim(), 
-        password,
-        options: {
-          data: {
-            full_name: name,
-          }
-        }
-      });
-      
-      if (error) {
-        console.error("[Auth] Registration error:", error);
-        throw new Error(error.message);
-      }
-      
-      if (!data.user) {
-        throw new Error("Registration failed - no user returned");
-      }
-
-      // Wait briefly for trigger to auto-create profile, then upsert
-      await new Promise(r => setTimeout(r, 800));
-      const { error: profileError } = await supabase.from("profiles").upsert({
-        id: data.user.id,
-        name,
-        email: email.trim(),
-        phone: phone ?? null,
-        role: role ?? "customer",
-      }, { onConflict: "id" });
-      
-      if (profileError) {
-        console.error("[Auth] Profile upsert error:", profileError);
-        throw new Error(profileError.message);
-      }
-
-      const newUser: User = { 
-        id: data.user.id, 
-        name, 
-        email: email.trim(), 
-        phone, 
-        role: role ?? "customer" 
-      };
-      
-      setUser(newUser);
-      return newUser;
-    } catch (e) {
-      console.error("[Auth] Registration exception:", e);
-      throw e;
-    }
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(), password,
+      options: { data: { full_name: name } },
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Registration failed - no user returned");
+    await new Promise(r => setTimeout(r, 800));
+    const { error: profileError } = await supabase.from("profiles").upsert({
+      id: data.user.id, name, email: email.trim(), phone: phone ?? null, role: role ?? "customer",
+    }, { onConflict: "id" });
+    if (profileError) throw new Error(profileError.message);
+    const newUser: User = { id: data.user.id, name, email: email.trim(), phone, role: role ?? "customer" };
+    setUser(newUser);
+    return newUser;
   };
 
   const logout = async () => {
-    try {
-      setCached(null);
-      setUser(null);
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.error("[Auth] Logout error:", e);
-    }
+    setUser(null);
+    profileCache.clear();
+    await supabase.auth.signOut();
+    // Clear both storages so no tab inherits a stale session after logout
+    window.sessionStorage.removeItem("sam_admin_auth");
+    window.localStorage.removeItem("sam_admin_auth");
   };
 
   return (

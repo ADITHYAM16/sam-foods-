@@ -243,8 +243,16 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const [splash, setSplash] = useState(true);
+  // Only show splash on first visit, not on refresh (SSR-safe)
+  const [splash, setSplash] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !sessionStorage.getItem("sam_visited");
+  });
   const router = useRouter();
+
+  useEffect(() => {
+    if (splash) sessionStorage.setItem("sam_visited", "1");
+  }, [splash]);
 
   // Handle Supabase OAuth redirect — the hash contains access_token after Google sign-in
   useEffect(() => {
@@ -252,7 +260,7 @@ function RootComponent() {
     const hash = window.location.hash;
     if (hash.includes("access_token") || hash.includes("error_description")) {
       // Let Supabase client parse the hash and establish the session
-      supabase.auth.getSession().then(({ data }) => {
+      supabase.auth.getSession().then(({ data }: any) => {
         if (data.session) {
           // Clean the hash from the URL without reload
           window.history.replaceState({}, document.title, window.location.pathname);

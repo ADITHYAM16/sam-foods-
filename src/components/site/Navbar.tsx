@@ -85,7 +85,7 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
             <Navigation className="h-4 w-4 shrink-0" />
             {gpsLoading ? "Fetching your location…" : "Use my location"}
           </button>
-          {gpsDone && !gpsLoading && onClose()}
+          {gpsDone && !gpsLoading && <span className="hidden" ref={() => { onClose(); }} />}
 
           {/* Saved addresses */}
           {saved.length > 0 && (
@@ -168,7 +168,7 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
             </div>
           ) : (
             <p className="text-center text-sm text-muted-foreground">
-              <Link to="/login" onClick={onClose} className="text-primary underline font-semibold">Sign in</Link> to save addresses
+              <Link to="/login" search={{ redirect: "/cart" } as any} onClick={onClose} className="text-primary underline font-semibold">Sign in</Link> to save addresses
             </p>
           )}
         </div>
@@ -273,7 +273,7 @@ export function Navbar() {
                         <hr className="my-1 border-border" />
                         {user.role === "admin" && <Link to="/admin" onClick={() => setUserOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-accent">Admin Dashboard</Link>}
                         {user.role === "delivery" && <Link to="/delivery" onClick={() => setUserOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-accent">Delivery Dashboard</Link>}
-                        <button onClick={() => { logout(); setUserOpen(false); navigate({ to: "/login" }); }}
+                        <button onClick={() => { logout(); setUserOpen(false); navigate({ to: "/login", search: { redirect: "/" } } as any); }}
                           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10">
                           <LogOut className="h-4 w-4" /> Logout
                         </button>
@@ -282,7 +282,7 @@ export function Navbar() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <Link to="/login" className="hidden items-center gap-1 rounded-full gradient-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-elegant hover:opacity-95 sm:inline-flex">
+                <Link to="/login" search={{ redirect: "/" } as any} className="hidden items-center gap-1 rounded-full gradient-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-elegant hover:opacity-95 sm:inline-flex">
                   <UserIcon className="h-4 w-4" /> Sign in
                 </Link>
               )}
@@ -342,13 +342,13 @@ export function Navbar() {
                         <div className="text-xs text-muted-foreground capitalize">{user.role}</div>
                       </div>
                     </div>
-                    <button onClick={() => { logout(); setMobileOpen(false); navigate({ to: "/login" }); }}
+                    <button onClick={() => { logout(); setMobileOpen(false); navigate({ to: "/login", search: { redirect: "/" } } as any); }}
                       className="flex w-full items-center justify-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-semibold text-destructive">
                       <LogOut className="h-4 w-4" /> Logout
                     </button>
                   </>
                 ) : (
-                  <Link to="/login" onClick={() => setMobileOpen(false)}
+                  <Link to="/login" search={{ redirect: "/" } as any} onClick={() => setMobileOpen(false)}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl gradient-primary py-3 text-sm font-semibold text-primary-foreground shadow-elegant">
                     <UserIcon className="h-4 w-4" /> Sign in
                   </Link>

@@ -7,7 +7,7 @@ i18n
   .use(initReactI18next)
   .init({
     fallbackLng: "en",
-    lng: typeof window !== "undefined" ? (localStorage.getItem("sam_lang") || "en") : "en",
+    lng: typeof window !== "undefined" ? (window.localStorage.getItem("sam_lang") || "en") : "en",
     resources: {
       en: {
         translation: {

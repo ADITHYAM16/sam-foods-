@@ -59,31 +59,52 @@ function TrackPage() {
   const secsLeft = useCancelCountdown(order?.created_at);
   const canCancel = secsLeft > 0 && order?.status === "Placed";
 
+  // Initial load only — fetch once by orderId, never re-fetch after that
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      if (orderId) {
-        // Always try to fetch by orderId first (works for guests and logged-in users)
-        const { data } = await (supabase.from("orders") as any).select("*").eq("id", orderId).single();
-        if (data) {
-          setOrder({ ...(data as any), items: (data as any).items as unknown as CartItem[] });
-        }
-      } else if (user && myOrders.length > 0) {
-        // Fallback: show most recent order for logged-in user
-        const o = myOrders[0] as any;
-        setOrder(o);
+    if (!orderId) {
+      // No orderId in URL — wait for myOrders to populate
+      if (myOrders.length > 0) {
+        setOrder(myOrders[0] as any);
+        setLoading(false);
       }
-      setLoading(false);
-    };
-    load();
-  }, [orderId, myOrders, user]);
+      return;
+    }
 
+    // Try from already-loaded myOrders first (instant, no DB call)
+    const cached = myOrders.find(o => o.id === orderId);
+    if (cached) {
+      setOrder(cached as any);
+      setLoading(false);
+      return;
+    }
+
+    // Not in cache yet — fetch once from DB
+    (supabase.from("orders") as any)
+      .select("*").eq("id", orderId).single()
+      .then(({ data }: any) => {
+        if (data) setOrder({ ...data, items: data.items as unknown as CartItem[] });
+        setLoading(false);
+      });
+  // Only run on mount and when orderId changes — NOT on every myOrders update
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
+
+  // Sync status updates from myOrders in real-time without re-fetching
+  useEffect(() => {
+    if (!order?.id || !myOrders.length) return;
+    const updated = myOrders.find(o => o.id === order.id);
+    if (updated && updated.status !== order.status) {
+      setOrder(prev => prev ? { ...prev, status: updated.status } : prev);
+    }
+  }, [myOrders]);
+
+  // Realtime channel for orders not in myOrders (e.g. guest orders)
   useEffect(() => {
     if (!order?.id) return;
     const channel = supabase
       .channel(`track-${order.id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${order.id}` }, (payload) => {
-        setOrder((prev) => prev ? { ...prev, status: payload.new.status as OrderStatus } : prev);
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${order.id}` }, (payload: any) => {
+        setOrder(prev => prev ? { ...prev, status: payload.new.status as OrderStatus } : prev);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -133,7 +154,13 @@ function TrackPage() {
   return (
     <SiteShell>
       <section className="mx-auto max-w-5xl px-4 py-12 md:px-6">
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-elegant md:p-10">
+        <div className={`rounded-3xl border p-6 shadow-elegant md:p-10 transition-colors duration-700 ${
+          order.status === "Delivered"
+            ? "border-emerald-500/40 bg-emerald-500/15"
+            : order.status === "Out for delivery"
+            ? "border-emerald-400/30 bg-emerald-500/8"
+            : "border-border bg-card"
+        }`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-wider text-muted-foreground">Order {order.id}</div>

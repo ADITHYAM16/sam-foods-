@@ -15,7 +15,7 @@ function RegisterPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState("+91");
   const [pw, setPw] = useState("");
   const [cpw, setCpw] = useState("");
   const [agree, setAgree] = useState(false);
@@ -60,7 +60,7 @@ function RegisterPage() {
         <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition hover:opacity-95 disabled:opacity-60">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Create account
         </button>
-        <p className="text-center text-sm text-muted-foreground">Already with us? <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link></p>
+        <p className="text-center text-sm text-muted-foreground">Already with us? <Link to="/login" search={{ redirect: "/" } as any} className="font-semibold text-primary hover:underline">Sign in</Link></p>
       </form>
     </AuthShell>
   );

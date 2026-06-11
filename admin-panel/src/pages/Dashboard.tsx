@@ -3,22 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
   IndianRupee, Pencil, Plus, ShoppingBag, Trash2,
-  Users, Utensils, X, AlertTriangle,
+  Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
-import { useOrders, updateOrderStatus, STATUS_FLOW, type OrderStatus, assignNearestAgent } from "@/lib/orders-store";
+import { useOrders, updateOrderStatus, type OrderStatus, assignNearestAgent } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
-import { createClient } from "@supabase/supabase-js";
-
-function getAdminClient() {
-  return createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  );
-}
-const adminClient = getAdminClient();
+import { adminClient } from "@/lib/admin-client";
 
 /* ─── Types ───────────────────────────────────────────────── */
 interface OrderRequest {
@@ -107,12 +98,31 @@ type AdminTab = "dashboard" | "agents" | "bulk-orders";
 export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: AdminTab) => void; pendingBulk?: number }) {
   const [items, setItems] = useState<FoodItem[]>([]);
   const [editing, setEditing] = useState<FoodItem | null>(null);
+  const [viewOrder, setViewOrder] = useState<ReturnType<typeof useOrders>[number] | null>(null);
   const [saving, setSaving] = useState(false);
   const liveOrders = useOrders();
+
+  const ADMIN_STATUS_FLOW: OrderStatus[] = ["Placed", "Preparing", "Ready"];
+
+  // Returns only the buttons valid for an order: next step only (forward-only, no undo)
+  function adminButtons(status: OrderStatus): OrderStatus[] {
+    if (status === "Placed") return ["Preparing"];
+    if (status === "Preparing") return ["Ready"];
+    return []; // Ready and beyond: agent handles it
+  }
+
+  async function handleAdminStatus(orderId: string, newStatus: OrderStatus) {
+    await updateOrderStatus(orderId, newStatus);
+    if (newStatus === "Ready") {
+      const err = await assignNearestAgent(orderId);
+      if (err) setAgentError(err);
+    }
+  }
   const [bulkOrders, setBulkOrders] = useState<
     { id: string; name: string; people: number; date: string; status: string }[]
   >([]);
   const [requests, setRequests] = useState<OrderRequest[]>([]);
+  const [agentError, setAgentError] = useState<string | null>(null);
 
   function playBeep() {
     try {
@@ -230,7 +240,6 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   }, [loadMenu]);
 
   async function acceptRequest(req: OrderRequest) {
-    // Create real order from request
     const { data: orderData, error } = await (adminClient.from("orders") as any).insert({
       user_id: req.user_id,
       customer: req.customer,
@@ -252,10 +261,8 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
 
     if (error || !orderData) return;
 
-    // Assign nearest (least busy) agent
-    await assignNearestAgent((orderData as any).id);
-
-    // Mark request accepted with order_id so user gets redirected
+    // Delivery request is sent when admin clicks Ready (not here)
+    // Mark request accepted with order_id so user gets redirected to track page
     await (adminClient.from("order_requests") as any)
       .update({ status: "accepted", order_id: (orderData as any).id })
       .eq("id", req.id);
@@ -325,6 +332,18 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           )}
         </AnimatePresence>
 
+        {/* ── Agent dispatch error ── */}
+        {agentError && (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" /> {agentError}
+            </div>
+            <button onClick={() => setAgentError(null)} className="grid h-6 w-6 place-items-center rounded-full hover:bg-destructive/20 transition">
+              <X className="h-3.5 w-3.5 text-destructive" />
+            </button>
+          </div>
+        )}
+
         {/* ── Stats ── */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s, i) => (
@@ -366,7 +385,13 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
             ) : (
               <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                 {liveOrders.map((o) => (
-                  <div key={o.id} className="rounded-2xl border border-border p-3">
+                  <div key={o.id} className={`rounded-2xl border p-3 transition-colors duration-700 ${
+                    o.status === "Delivered"
+                      ? "border-emerald-500/40 bg-emerald-500/20"
+                      : o.status === "Out for delivery"
+                      ? "border-emerald-400/30 bg-emerald-500/10"
+                      : "border-border"
+                  }`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
@@ -381,13 +406,34 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                     <div className="mt-1 text-xs text-muted-foreground">
                       {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {STATUS_FLOW.map((s) => (
-                        <button key={s} onClick={() => updateOrderStatus(o.id, s as OrderStatus)}
-                          className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${o.status === s ? "gradient-primary text-primary-foreground" : "border border-border bg-background text-muted-foreground hover:bg-accent"}`}>
-                          {s}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {/* Forward-only buttons — only next valid step shown */}
+                      {adminButtons(o.status).map((s) => (
+                        <button key={s} onClick={() => handleAdminStatus(o.id, s)}
+                          className="rounded-full gradient-primary px-2.5 py-1 text-[10px] font-bold text-primary-foreground shadow-sm transition hover:opacity-90">
+                          → {s}
                         </button>
                       ))}
+                      {/* Current status badge (read-only) */}
+                      {(o.status === "Out for delivery" || o.status === "Delivered" || o.status === "Ready") && (
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                          o.status === "Delivered" ? "bg-emerald-600/10 text-emerald-600"
+                          : o.status === "Out for delivery" ? "bg-blue-500/10 text-blue-600"
+                          : "bg-amber-500/10 text-amber-600"
+                        }`}>
+                          {o.status === "Ready" ? "⏳ Awaiting agent" : o.status}
+                        </span>
+                      )}
+                      {/* Current stage label for Placed/Preparing */}
+                      {(o.status === "Placed" || o.status === "Preparing") && (
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground font-medium">
+                          {o.status}
+                        </span>
+                      )}
+                      <button onClick={() => setViewOrder(o)}
+                        className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                        <Eye className="h-3 w-3" /> View
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -473,6 +519,74 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
             </div>
           </div>
         </div>
+
+        {/* ── View Order Modal ── */}
+        {viewOrder && (
+          <div onClick={() => setViewOrder(null)} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ y: 20, opacity: 0, scale: 0.97 }} animate={{ y: 0, opacity: 1, scale: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-elegant">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-[Fraunces] text-xl font-bold">Order Details</h3>
+                <button onClick={() => setViewOrder(null)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent transition">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
+                  <User className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Customer</div>
+                    <div className="text-sm font-semibold">{viewOrder.customer}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
+                  <MapPin className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Delivery Location</div>
+                    <div className="text-sm font-semibold">{viewOrder.room}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
+                  <CreditCard className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Mode of Payment</div>
+                    <div className="text-sm font-semibold uppercase">{viewOrder.payment_method ?? "—"}
+                      <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        viewOrder.payment_status === "paid" ? "bg-emerald-600/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                      }`}>{viewOrder.payment_status ?? "pending"}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
+                  <Clock className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Delivery Time</div>
+                    <div className="text-sm font-semibold">{viewOrder.delivery_time}</div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border bg-background p-3">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Items</div>
+                  <div className="space-y-0.5">
+                    {viewOrder.items.map((it, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span>{it.name}</span>
+                        <span className="text-muted-foreground">×{it.qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 border-t border-border pt-2 flex justify-between text-sm font-bold">
+                    <span>Total</span><span>₹{viewOrder.total}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-border bg-background p-3">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <StatusPill s={viewOrder.status} />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* ── Edit / Add modal ── */}
         {editing && (

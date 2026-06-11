@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { adminClient } from "@/lib/admin-client";
 import type { FoodItem } from "./menu-data";
 
 export interface CartItem extends FoodItem {
@@ -75,40 +76,30 @@ export async function placeOrder(o: {
   return { ...data, items: data.items as unknown as CartItem[], delivery_time: data.delivery_time };
 }
 
-export async function assignNearestAgent(orderId: string): Promise<void> {
-  try {
-    // Get all delivery agents
-    const { data: agents } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("role", "delivery");
+// Send delivery request to ALL active agents simultaneously
+// Returns error string if something goes wrong, null on success
+export async function assignNearestAgent(orderId: string): Promise<string | null> {
+  const { data: agents, error: agentsError } = await (adminClient.from("delivery_agents") as any)
+    .select("id").eq("active", true);
 
-    if (!agents || agents.length === 0) return;
+  if (agentsError) return `Failed to fetch agents: ${agentsError.message}`;
+  if (!agents || agents.length === 0) return "No active delivery agents found. Please add agents in the Agents tab.";
 
-    // Count active orders per agent
-    const { data: activeOrders } = await (supabase.from("orders") as any)
-      .select("delivery_agent_id")
-      .in("status", ["Placed", "Preparing", "Ready", "Out for delivery"])
-      .not("delivery_agent_id", "is", null);
+  await (adminClient.from("delivery_requests") as any)
+    .update({ status: "denied" })
+    .eq("order_id", orderId)
+    .eq("status", "pending");
 
-    const loadMap: Record<string, number> = {};
-    agents.forEach((a) => { loadMap[a.id] = 0; });
-    (activeOrders ?? []).forEach((o: any) => {
-      if (o.delivery_agent_id && loadMap[o.delivery_agent_id] !== undefined) {
-        loadMap[o.delivery_agent_id]++;
-      }
-    });
+  const rows = (agents as { id: string }[]).map(a => ({
+    order_id: orderId,
+    agent_id: a.id,
+    status: "pending",
+  }));
 
-    // Pick agent with fewest active orders
-    const leastBusy = Object.entries(loadMap).sort((a, b) => a[1] - b[1])[0];
-    if (!leastBusy) return;
+  const { error: insertError } = await (adminClient.from("delivery_requests") as any).insert(rows);
+  if (insertError) return `Failed to send delivery request: ${insertError.message}`;
 
-    await (supabase.from("orders") as any)
-      .update({ delivery_agent_id: leastBusy[0] })
-      .eq("id", orderId);
-  } catch (e) {
-    console.error("[assignNearestAgent] Error:", e);
-  }
+  return null;
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
@@ -128,20 +119,28 @@ export function useOrders(): Order[] {
   const [list, setList] = useState<Order[]>([]);
 
   useEffect(() => {
-    const fetch = () => {
-      (supabase.from("orders") as any)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .then(({ data }: any) => {
-          if (data) setList(data.map((o: any) => ({ ...o, items: o.items as unknown as CartItem[] })));
-        });
-    };
+    const toOrder = (o: any): Order => ({ ...o, items: o.items as unknown as CartItem[] });
 
-    fetch();
+    (supabase.from("orders") as any)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }: any) => {
+        if (data) setList(data.map(toOrder));
+      });
+
     const channel = supabase
       .channel("orders-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetch)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" },
+        ({ new: row }) => setList(prev => [toOrder(row), ...prev])
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" },
+        ({ new: row }) => setList(prev => prev.map(o => o.id === (row as any).id ? toOrder(row) : o))
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" },
+        ({ old: row }) => setList(prev => prev.filter(o => o.id !== (row as any).id))
+      )
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, []);
 

@@ -415,7 +415,7 @@ function Index() {
             </form>
           ) : (
             <p className="text-sm text-muted-foreground">
-              <Link to="/login" className="font-semibold text-primary underline">Sign in</Link> to leave a review.
+              <Link to="/login" search={{ redirect: "/" } as any} className="font-semibold text-primary underline">Sign in</Link> to leave a review.
             </p>
           )}
         </motion.div>

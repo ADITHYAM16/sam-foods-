@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type Role = "customer" | "admin" | "delivery";
@@ -20,200 +20,113 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const CACHE_KEY = "sam_user_cache";
-
-function getCached(): User | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function setCached(u: User | null) {
-  if (u) localStorage.setItem(CACHE_KEY, JSON.stringify(u));
-  else localStorage.removeItem(CACHE_KEY);
-}
 
 async function fetchProfile(id: string, email?: string, displayName?: string): Promise<User | null> {
   try {
-    const { data, error } = await (supabase.from("profiles") as any)
-      .select("*").eq("id", id).single();
+    const { data } = await (supabase.from("profiles") as any)
+      .select("id,name,email,phone,role").eq("id", id).single();
 
-    if (!error && data) {
-      const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
-      setCached(u);
-      return u;
-    }
+    if (data) return { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
 
-    // Profile missing — try delivery_agents table first
-    const { data: agentData } = await (supabase.from("delivery_agents") as any)
+    const { data: agent } = await (supabase.from("delivery_agents") as any)
       .select("id,name,email,phone").eq("id", id).single();
 
-    if (agentData) {
-      await (supabase.from("profiles") as any).upsert({
-        id: agentData.id, name: agentData.name, email: agentData.email,
-        phone: agentData.phone ?? null, role: "delivery",
-      }, { onConflict: "id" });
-      const u: User = { id: agentData.id, name: agentData.name, email: agentData.email, phone: agentData.phone ?? undefined, role: "delivery" };
-      setCached(u);
-      return u;
+    if (agent) {
+      await (supabase.from("profiles") as any).upsert(
+        { id: agent.id, name: agent.name, email: agent.email, phone: agent.phone ?? null, role: "delivery" },
+        { onConflict: "id" }
+      );
+      return { id: agent.id, name: agent.name, email: agent.email, phone: agent.phone ?? undefined, role: "delivery" };
     }
 
-    // Auto-create profile for Google / OAuth users
     if (email) {
       const name = displayName || email.split("@")[0];
-      const { error: upsertErr } = await (supabase.from("profiles") as any).upsert({
-        id, name, email, phone: null, role: "customer",
-      }, { onConflict: "id" });
-      if (!upsertErr) {
-        const u: User = { id, name, email, role: "customer" };
-        setCached(u);
-        return u;
-      }
-      console.error("[Auth] Auto-create profile error:", upsertErr);
+      await (supabase.from("profiles") as any).upsert(
+        { id, name, email, phone: null, role: "customer" },
+        { onConflict: "id" }
+      );
+      return { id, name, email, role: "customer" };
     }
 
-    console.error("[Auth] Profile fetch error:", error);
     return null;
-  } catch (e) { console.error("[Auth] Profile fetch exception:", e); return null; }
+  } catch (e) {
+    console.error("[Auth] fetchProfile error:", e);
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => getCached());
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Prevent onAuthStateChange from overwriting user set by login()
+  const skipNextAuthEvent = useRef(false);
+  // Track if getSession has resolved so we never show logged-out flash
+  const sessionResolved = useRef(false);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 5000);
-
-    supabase.auth.getSession().then(async ({ data, error }) => {
-      if (error) console.error("[Auth] Session error:", error);
-      if (data.session?.user) {
-        const cached = getCached();
-        if (cached) setUser(cached);
+    // On mount: read persisted session synchronously via onAuthStateChange
+    // INITIAL_SESSION fires before any render-visible state change
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
+      if (!sessionResolved.current) {
+        // First event is always INITIAL_SESSION — use it to hydrate user
+        sessionResolved.current = true;
+        if (session?.user) {
+          const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name);
+          setUser(profile);
+        }
         setLoading(false);
-        const su = data.session.user;
-        const displayName = su.user_metadata?.full_name || su.user_metadata?.name || undefined;
-        fetchProfile(su.id, su.email ?? undefined, displayName).then(p => { if (p) setUser(p); });
-      } else {
-        setCached(null);
-        setUser(null);
-        setLoading(false);
+        return;
       }
-      clearTimeout(timeout);
-    });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const su = session.user;
-        const displayName = su.user_metadata?.full_name || su.user_metadata?.name || undefined;
-        const cached = getCached();
-        if (cached && cached.id === su.id) setUser(cached);
-        fetchProfile(su.id, su.email ?? undefined, displayName).then(p => { if (p) setUser(p); });
-      } else {
-        setCached(null);
+      if (skipNextAuthEvent.current) {
+        skipNextAuthEvent.current = false;
+        return;
+      }
+      if (event === "SIGNED_OUT") {
         setUser(null);
+      } else if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+        const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name);
+        setUser(profile);
       }
     });
 
-    return () => { clearTimeout(timeout); sub.subscription.unsubscribe(); };
+    return () => subscription.unsubscribe();
   }, []);
 
   const login: AuthContextValue["login"] = async (email, password) => {
-    try {
-      console.log("[Auth] Attempting login for:", email);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email: email.trim(), 
-        password 
-      });
-      
-      if (error) {
-        console.error("[Auth] Login error:", error);
-        throw new Error(error.message);
-      }
-      
-      if (!data.user) {
-        throw new Error("Login failed - no user returned");
-      }
-
-      console.log("[Auth] Login successful, fetching profile...");
-      const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim(), data.user.user_metadata?.full_name);
-      
-      if (!profile) {
-        throw new Error("Could not load profile. Please try again.");
-      }
-
-      console.log("[Auth] Profile loaded:", profile.email, profile.role);
-      setUser(profile);
-      return profile;
-    } catch (e) {
-      console.error("[Auth] Login exception:", e);
-      throw e;
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) throw new Error(error.message.includes("Invalid login") ? "Invalid email or password." : error.message);
+    if (!data.user) throw new Error("Login failed.");
+    const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim(), data.user.user_metadata?.full_name);
+    if (!profile) throw new Error("Could not load profile. Please try again.");
+    // Skip the SIGNED_IN event fired by signInWithPassword — we already have the profile
+    skipNextAuthEvent.current = true;
+    setUser(profile);
+    return profile;
   };
 
   const register: AuthContextValue["register"] = async ({ name, email, phone, password, role }) => {
-    try {
-      console.log("[Auth] Attempting registration for:", email);
-      
-      const { data, error } = await supabase.auth.signUp({ 
-        email: email.trim(), 
-        password,
-        options: {
-          data: {
-            full_name: name,
-          }
-        }
-      });
-      
-      if (error) {
-        console.error("[Auth] Registration error:", error);
-        throw new Error(error.message);
-      }
-      
-      if (!data.user) {
-        throw new Error("Registration failed - no user returned");
-      }
-
-      // Wait briefly for trigger to auto-create profile, then upsert
-      await new Promise(r => setTimeout(r, 800));
-      const { error: profileError } = await (supabase.from("profiles") as any).upsert({
-        id: data.user.id,
-        name,
-        email: email.trim(),
-        phone: phone ?? null,
-        role: role ?? "customer",
-      }, { onConflict: "id" });
-      
-      if (profileError) {
-        console.error("[Auth] Profile upsert error:", profileError);
-        throw new Error(profileError.message);
-      }
-
-      const newUser: User = { 
-        id: data.user.id, 
-        name, 
-        email: email.trim(), 
-        phone, 
-        role: role ?? "customer" 
-      };
-      
-      setUser(newUser);
-      return newUser;
-    } catch (e) {
-      console.error("[Auth] Registration exception:", e);
-      throw e;
-    }
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(), password,
+      options: { data: { full_name: name } },
+    });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Registration failed.");
+    await new Promise(r => setTimeout(r, 800));
+    const { error: profileError } = await (supabase.from("profiles") as any).upsert(
+      { id: data.user.id, name, email: email.trim(), phone: phone ?? null, role: role ?? "customer" },
+      { onConflict: "id" }
+    );
+    if (profileError) throw new Error(profileError.message);
+    const newUser: User = { id: data.user.id, name, email: email.trim(), phone, role: role ?? "customer" };
+    skipNextAuthEvent.current = true;
+    setUser(newUser);
+    return newUser;
   };
 
   const logout = async () => {
-    try {
-      setCached(null);
-      setUser(null);
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.error("[Auth] Logout error:", e);
-    }
+    setUser(null);
+    await supabase.auth.signOut();
   };
 
   return (

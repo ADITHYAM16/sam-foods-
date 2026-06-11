@@ -5,18 +5,8 @@ import {
   Plus, Trash2, User, X, TrendingUp, Lock, Eye, Calendar,
   Package, Star,
 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
+import { adminClient } from "@/lib/admin-client";
 import { AdminShell } from "@/components/AdminShell";
-
-function getAdminClient() {
-  return createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  );
-}
-
-const adminClient = getAdminClient();
 
 interface Agent {
   id: string;

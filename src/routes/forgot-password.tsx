@@ -43,7 +43,7 @@ function ForgotPage() {
   // Listen for Supabase PASSWORD_RECOVERY event — only fired after user
   // clicks the reset link in their email, giving us a valid session to update
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: any) => {
       if (event === "PASSWORD_RECOVERY") {
         setStep("new-password");
       }
@@ -76,7 +76,7 @@ function ForgotPage() {
           <button onClick={sendReset} disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant disabled:opacity-60">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Send reset link
           </button>
-          <p className="text-center text-sm text-muted-foreground">Remembered? <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link></p>
+          <p className="text-center text-sm text-muted-foreground">Remembered? <Link to="/login" search={{ redirect: "/" } as any} className="font-semibold text-primary hover:underline">Sign in</Link></p>
         </motion.div>
       )}
       {step === "check-inbox" && (
@@ -111,7 +111,7 @@ function ForgotPage() {
           <CheckCircle2 className="mx-auto h-16 w-16 text-emerald-600" />
           <h2 className="font-[Fraunces] text-2xl font-bold">All set!</h2>
           <p className="text-muted-foreground">Your password has been updated.</p>
-          <button onClick={() => navigate({ to: "/login" })} className="w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant">Back to sign in</button>
+          <button onClick={() => navigate({ to: "/login", search: { redirect: "/" } } as any)} className="w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant">Back to sign in</button>
         </motion.div>
       )}
     </AuthShell>

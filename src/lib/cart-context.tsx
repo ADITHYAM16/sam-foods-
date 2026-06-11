@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { FoodItem } from "./menu-data";
 
 export interface CartItem extends FoodItem {
@@ -39,23 +39,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") window.localStorage.setItem(KEY, JSON.stringify(items));
   }, [items]);
 
-  const add = (item: FoodItem) => {
-    if (item.veg === false) {
-      if (typeof window !== "undefined") {
-        console.warn("[SAM] Blocked non-veg item from cart:", item.name);
-      }
-      return;
-    }
+  const add = useCallback((item: FoodItem) => {
+    if (item.veg === false) return;
     setItems((prev) => {
       const f = prev.find((p) => p.id === item.id);
       if (f) return prev.map((p) => (p.id === item.id ? { ...p, qty: p.qty + 1 } : p));
       return [...prev, { ...item, qty: 1 }];
     });
-  };
-  const remove = (id: string) => setItems((prev) => prev.filter((p) => p.id !== id));
-  const setQty = (id: string, qty: number) =>
-    setItems((prev) => (qty <= 0 ? prev.filter((p) => p.id !== id) : prev.map((p) => (p.id === id ? { ...p, qty } : p))));
-  const clear = () => setItems([]);
+  }, []);
+  const remove = useCallback((id: string) => setItems((prev) => prev.filter((p) => p.id !== id)), []);
+  const setQty = useCallback((id: string, qty: number) =>
+    setItems((prev) => (qty <= 0 ? prev.filter((p) => p.id !== id) : prev.map((p) => (p.id === id ? { ...p, qty } : p)))), []);
+  const clear = useCallback(() => setItems([]), []);
 
   const value = useMemo<CartContextValue>(() => {
     const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);

@@ -35,6 +35,7 @@ interface BulkOrderRow {
   location: string;
   phone: string;
   menu_request: string | null;
+  budget?: string;
   created_at: string;
 }
 
@@ -322,7 +323,7 @@ function Receipt({ order, onClose }: { order: BulkOrderRow; onClose: () => void 
         <tr><td>Guests</td><td>${order.people}</td></tr>
         <tr><td>Location</td><td>${order.location}</td></tr>
         ${order.menu_request ? `<tr><td>Menu Request</td><td>${order.menu_request}</td></tr>` : ""}
-        <tr><td>Budget Range</td><td>${order.budget}</td></tr>
+        ${order.budget ? `<tr><td>Budget Range</td><td>${order.budget}</td></tr>` : ""}
         <tr><td>Payment Reference</td><td>${order.payment_ref}</td></tr>
         <tr><td>Paid On</td><td>${order.paid_at ? new Date(order.paid_at).toLocaleString("en-IN") : "-"}</td></tr>
         <tr class="total-row"><td>Amount Paid</td><td>₹${order.quoted_amount?.toLocaleString()}</td></tr>

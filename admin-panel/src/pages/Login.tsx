@@ -5,11 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 
 type OwnerRole = "admin" | "delivery";
 
-interface LoginProps {
-  onSuccess: (role: OwnerRole) => void;
-}
-
-export function Login({ onSuccess }: LoginProps) {
+export function Login() {
   const { login } = useAuth();
   const [role, setRole] = useState<OwnerRole>("admin");
   const [email, setEmail] = useState("sam@gmail.com");
@@ -29,9 +25,8 @@ export function Login({ onSuccess }: LoginProps) {
       if (u.role !== role) {
         setErr(`This account is not a ${role === "admin" ? "Admin" : "Delivery Agent"} account.`);
         setBusy(false);
-        return;
       }
-      onSuccess(role);
+      // App.tsx reads user.role from auth context — no onSuccess needed
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Sign in failed.";
       setErr(msg.includes("Invalid login") ? "Invalid email or password." : msg);

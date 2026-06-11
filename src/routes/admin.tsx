@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { type FoodItem, CATEGORIES } from "@/lib/menu-data";
-import { useOrders, updateOrderStatus, STATUS_FLOW, type OrderStatus } from "@/lib/orders-store";
+import { useOrders, updateOrderStatus, assignNearestAgent, STATUS_FLOW, type OrderStatus } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveImage, resolveDescription } from "@/lib/food-image-resolver";
 
@@ -305,8 +305,16 @@ function AdminPage() {
 
   // Only allow advancing to NEXT status in flow (not jumping)
   const nextStatus = (current: OrderStatus): OrderStatus | null => {
-    const i = STATUS_FLOW.indexOf(current);
-    return i < STATUS_FLOW.length - 1 ? STATUS_FLOW[i + 1] : null;
+    if (current === "Placed") return "Preparing";
+    if (current === "Preparing") return "Ready";
+    return null; // Ready+ is handled by delivery agent
+  };
+
+  const handleAdvanceOrder = async (orderId: string, next: OrderStatus) => {
+    await updateOrderStatus(orderId, next);
+    if (next === "Ready") {
+      await assignNearestAgent(orderId);
+    }
   };
 
   const handleSaveItem = async () => {
@@ -477,14 +485,18 @@ function AdminPage() {
                             </span>
                           </div>
                         </div>
-                        {/* Next-only status button — only show if not delivered/cancelled */}
-                        {o.status !== "Delivered" && o.status !== "Cancelled" && next && (
+                        {/* Status advance buttons — Placed→Preparing→Ready only */}
+                        {next && (
                           <div className="mt-3">
                             <button
-                              onClick={() => updateOrderStatus(o.id, next)}
-                              className="cursor-pointer rounded-full gradient-primary px-4 py-1.5 text-[11px] font-bold text-primary-foreground shadow-elegant transition hover:scale-105 active:scale-95"
+                              onClick={() => handleAdvanceOrder(o.id, next)}
+                              className={`cursor-pointer rounded-full px-4 py-1.5 text-[11px] font-bold text-primary-foreground shadow-elegant transition hover:scale-105 active:scale-95 ${
+                                next === "Ready"
+                                  ? "bg-emerald-600 hover:bg-emerald-700"
+                                  : "gradient-primary"
+                              }`}
                             >
-                              → Mark as {next}
+                              {next === "Preparing" ? "🍳 Start Preparing" : "✅ Mark Ready & Notify Agent"}
                             </button>
                           </div>
                         )}

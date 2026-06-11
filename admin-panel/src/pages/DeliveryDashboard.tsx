@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, CheckCircle2, IndianRupee, Loader2, MapPin, Navigation, Package, X } from "lucide-react";
+import { Bell, CheckCircle, CheckCircle2, IndianRupee, Loader2, MapPin, Navigation, Package, X, XCircle } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { updateOrderStatus, type OrderStatus, type Order } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 import type { CartItem } from "@/lib/orders-store";
 
 function StatusPill({ s }: { s: string }) {
@@ -15,58 +16,171 @@ function StatusPill({ s }: { s: string }) {
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${map[s] || "bg-muted text-foreground"}`}>{s}</span>;
 }
 
-function useTodayDeliveryOrders() {
+interface DeliveryRequest {
+  id: string;
+  order_id: string;
+  status: "pending" | "accepted" | "denied";
+  order: Order | null;
+}
+
+function useDeliveryRequests(agentId: string | null, onAccepted: (order: Order) => void) {
+  const [requests, setRequests] = useState<DeliveryRequest[]>([]);
+
+  const loadRequests = useCallback(async () => {
+    if (!agentId) return;
+    const { data } = await supabase
+      .from("delivery_requests" as any)
+      .select("id, order_id, status")
+      .eq("agent_id", agentId)
+      .eq("status", "pending");
+    if (!data) return;
+
+    const withOrders = await Promise.all(
+      (data as any[]).map(async (r) => {
+        const { data: od } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("id", r.order_id)
+          .single();
+        return {
+          id: r.id,
+          order_id: r.order_id,
+          status: r.status,
+          order: od ? { ...od, items: od.items as unknown as CartItem[] } as Order : null,
+        };
+      })
+    );
+    setRequests(withOrders.filter(r => r.order !== null));
+  }, [agentId]);
+
+  useEffect(() => {
+    loadRequests();
+    if (!agentId) return;
+    const ch = supabase
+      .channel(`delivery-req-${agentId}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "delivery_requests", filter: `agent_id=eq.${agentId}` },
+        () => {
+          try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.start(); osc.stop(ctx.currentTime + 0.4);
+          } catch {}
+          loadRequests();
+        }
+      )
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "delivery_requests", filter: `agent_id=eq.${agentId}` },
+        ({ new: row }) => {
+          const r = row as any;
+          if (r.status !== "pending") setRequests(prev => prev.filter(x => x.id !== r.id));
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [loadRequests, agentId]);
+
+  async function acceptRequest(req: DeliveryRequest) {
+    if (!agentId || !req.order) return;
+    await (supabase.from("delivery_requests") as any)
+      .update({ status: "accepted" })
+      .eq("id", req.id);
+    await (supabase.from("orders") as any)
+      .update({ delivery_agent_id: agentId, status: "Out for delivery" })
+      .eq("id", req.order_id);
+    // Immediately push the accepted order into active deliveries without waiting for realtime
+    const acceptedOrder: Order = { ...req.order, delivery_agent_id: agentId, status: "Out for delivery" };
+    onAccepted(acceptedOrder);
+    setRequests(prev => prev.filter(x => x.id !== req.id));
+  }
+
+  async function denyRequest(req: DeliveryRequest) {
+    await (supabase.from("delivery_requests") as any)
+      .update({ status: "denied" })
+      .eq("id", req.id);
+    setRequests(prev => prev.filter(x => x.id !== req.id));
+  }
+
+  return { requests, acceptRequest, denyRequest };
+}
+
+function useTodayDeliveryOrders(agentId: string | null) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newAlert, setNewAlert] = useState<Order | null>(null);
-  const prevIds = useRef<Set<string>>(new Set());
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  const todayISO = todayStart.toISOString();
 
   const fetch = useCallback(async () => {
+    if (!agentId) { setLoading(false); return; }
     try {
       const { data, error } = await supabase
         .from("orders")
         .select("*")
-        .in("status", ["Ready", "Out for delivery", "Delivered"])
-        .gte("created_at", todayStart.toISOString())
+        .eq("delivery_agent_id", agentId)
+        .in("status", ["Out for delivery", "Delivered"])
+        .gte("created_at", todayISO)
         .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        const mapped = (data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })) as Order[];
-        mapped.forEach((o) => {
-          if (o.status === "Ready" && !prevIds.current.has(o.id)) {
-            setNewAlert(o);
-            try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch {}
-          }
-        });
-        prevIds.current = new Set(mapped.map((o) => o.id));
-        setOrders(mapped);
-      }
+      if (!error && data)
+        setOrders((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })) as Order[]);
     } finally {
       setLoading(false);
     }
+  }, [agentId, todayISO]);
+
+  const addOrder = useCallback((order: Order) => {
+    setOrders(prev => prev.some(o => o.id === order.id) ? prev.map(o => o.id === order.id ? order : o) : [order, ...prev]);
   }, []);
 
   useEffect(() => {
     fetch();
     const channel = supabase
-      .channel("admin-delivery-orders")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, fetch)
+      .channel(`delivery-orders-${agentId}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        ({ new: row }) => {
+          const o = row as any;
+          // Only touch orders that belong to this agent
+          if (o.delivery_agent_id !== agentId) return;
+          const updated: Order = { ...o, items: o.items as unknown as CartItem[] };
+          if (o.status === "Out for delivery" || o.status === "Delivered") {
+            setOrders(prev =>
+              prev.some(x => x.id === o.id)
+                ? prev.map(x => x.id === o.id ? updated : x)
+                : [updated, ...prev]
+            );
+          } else {
+            // Removed from active list (e.g. cancelled)
+            setOrders(prev => prev.filter(x => x.id !== o.id));
+          }
+        }
+      )
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "orders" },
+        ({ old: row }) => setOrders(prev => prev.filter(x => x.id !== (row as any).id))
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { orders, loading, newAlert, clearAlert: () => setNewAlert(null) };
+  return { orders, loading, addOrder };
 }
 
 type AdminTab = "dashboard" | "agents";
 
 export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab) => void }) {
-  const { orders, loading, newAlert, clearAlert } = useTodayDeliveryOrders();
+  const { user } = useAuth();
+  const agentId = user?.id ?? null;
+  const { orders, loading, addOrder } = useTodayDeliveryOrders(agentId);
+  const { requests, acceptRequest, denyRequest } = useDeliveryRequests(agentId, addOrder);
 
-  const activeOrders = orders.filter((o) => o.status === "Ready" || o.status === "Out for delivery");
+  const activeOrders = orders.filter((o) => o.status === "Out for delivery");
   const deliveredOrders = orders.filter((o) => o.status === "Delivered");
   const todayEarnings = deliveredOrders.reduce((s, o) => s + Math.round(o.total * 0.08), 0);
 
@@ -80,30 +194,50 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
     <AdminShell activeTab="delivery" onNavigate={onNavigate}>
       <section className="mx-auto max-w-5xl px-4 py-10 md:px-6">
 
-        {/* New order alert banner */}
+        {/* ── Incoming delivery requests ── */}
         <AnimatePresence>
-          {newAlert && (
-            <motion.div
+          {requests.map((req) => req.order && (
+            <motion.div key={req.id}
               initial={{ opacity: 0, y: -16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
-              className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 shadow-sm"
+              className="mb-3 rounded-2xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 p-4 shadow-sm"
             >
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
-                </span>
-                <Bell className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                  New order ready — {newAlert.customer}, Room {newAlert.room} · ₹{newAlert.total}
-                </span>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <span className="relative flex h-3 w-3 shrink-0 mt-1">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                        New delivery request!
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm font-semibold">{req.order.customer} · Room {req.order.room} · ₹{req.order.total}</div>
+                    <div className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-400">
+                      {req.order.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
+                    </div>
+                    <div className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-400">
+                      Payment: {(req.order as any).payment_method?.toUpperCase()} · {(req.order as any).payment_status}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => acceptRequest(req)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition">
+                    <CheckCircle className="h-3.5 w-3.5" /> Accept
+                  </button>
+                  <button onClick={() => denyRequest(req)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-3 py-2 text-xs font-bold text-white hover:opacity-90 transition">
+                    <XCircle className="h-3.5 w-3.5" /> Deny
+                  </button>
+                </div>
               </div>
-              <button onClick={clearAlert} className="grid h-6 w-6 place-items-center rounded-full hover:bg-amber-100 dark:hover:bg-amber-900">
-                <X className="h-3.5 w-3.5 text-amber-600" />
-              </button>
             </motion.div>
-          )}
+          ))}
         </AnimatePresence>
 
         {/* Header */}
@@ -181,9 +315,9 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
                         <Navigation className="h-3.5 w-3.5" /> Navigate
                       </a>
                       <button
-                        onClick={() => updateOrderStatus(o.id, o.status === "Ready" ? "Out for delivery" : "Delivered" as OrderStatus)}
+                        onClick={() => updateOrderStatus(o.id, "Delivered" as OrderStatus)}
                         className="rounded-full gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-elegant">
-                        {o.status === "Ready" ? "🚴 Pick up" : "✓ Mark delivered"}
+                        ✓ Mark delivered
                       </button>
                     </div>
                   </div>

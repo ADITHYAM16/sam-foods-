@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Minus, Plus, Tag, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, User, LogIn, MapPin, Navigation, Clock, X } from "lucide-react";
+import { Minus, Plus, Tag, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, LogIn, MapPin, Navigation, Clock, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -47,7 +47,6 @@ function CartPage() {
   const [discount, setDiscount] = useState(0);
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
 
-  const [guestName, setGuestName] = useState("");
   const [selectedAddress, setSelectedAddress] = useState(active?.address ?? "");
   const [manualLocation, setManualLocation] = useState("");
   const [payMethod, setPayMethod] = useState<"cod" | "gpay">("cod");
@@ -58,6 +57,7 @@ function CartPage() {
 
   const [gpsAddress, setGpsAddress] = useState("");
   const [showManual, setShowManual] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
   // pick the active (default) address once on mount
   useEffect(() => {
@@ -70,27 +70,72 @@ function CartPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
 
-  // Listen for admin accept/deny on the request
+  // Reset placing/requestStatus when user comes back to cart after a completed order
+  useEffect(() => {
+    if (items.length === 0 && requestStatus !== "waiting") {
+      setPlacing(false);
+      setRequestStatus(null);
+      setRequestId(null);
+    }
+  }, [items.length]);
+
+  // Listen for admin accept/deny on the request (realtime + polling fallback)
   useEffect(() => {
     if (!requestId) return;
+
+    let cancelled = false;
+
+    // Realtime channel
     const channel = supabase
       .channel(`request-${requestId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "order_requests", filter: `id=eq.${requestId}` },
         (payload) => {
+          if (cancelled) return;
           const s = (payload.new as any).status;
           if (s === "accepted") {
             const orderId = (payload.new as any).order_id;
-            clear();
+            cancelled = true;
             supabase.removeChannel(channel);
             navigate({ to: "/track", search: { orderId } });
+            clear();
           } else if (s === "denied") {
-            setRequestStatus("denied");
+            cancelled = true;
             supabase.removeChannel(channel);
+            setRequestStatus("denied");
           }
         }
       ).subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // Polling fallback every 3s — handles cases where realtime event is missed
+    const poll = setInterval(async () => {
+      if (cancelled) { clearInterval(poll); return; }
+      try {
+        const { data } = await (supabase.from("order_requests") as any)
+          .select("status, order_id")
+          .eq("id", requestId)
+          .single();
+        if (!data || cancelled) return;
+        if (data.status === "accepted") {
+          cancelled = true;
+          clearInterval(poll);
+          supabase.removeChannel(channel);
+          navigate({ to: "/track", search: { orderId: data.order_id } });
+          clear();
+        } else if (data.status === "denied") {
+          cancelled = true;
+          clearInterval(poll);
+          supabase.removeChannel(channel);
+          setRequestStatus("denied");
+        }
+      } catch { /* ignore poll errors */ }
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
   }, [requestId, clear, navigate]);
 
   const deliveryLocation = selectedAddress;
@@ -117,13 +162,16 @@ function CartPage() {
 
   const finalTotal = Math.max(0, total - discount);
 
-  const customerName = user?.name || guestName.trim() || "Guest";
+  const customerName = user?.name || "Guest";
   const customerEmail = user?.email ?? null;
 
   const checkout = async () => {
     setOrderErr(null);
-    if (!user && !guestName.trim()) return setOrderErr("Please enter your name.");
+    if (!user) { setShowAuthPrompt(true); return; }
     if (!deliveryLocation) return setOrderErr("Please enter your delivery location.");
+    // Reset any previous order state before starting fresh
+    setRequestId(null);
+    setRequestStatus(null);
     setPlacing(true);
 
     const orderPayload = {
@@ -164,19 +212,21 @@ function CartPage() {
                 resolve();
               } catch (e) { reject(e); }
             },
-            modal: { ondismiss: () => reject(new Error("Payment cancelled.")) },
+            modal: { ondismiss: () => { setPlacing(false); reject(new Error("Payment cancelled.")); } },
           });
           rzp.open();
         });
+        // GPay success: keep placing=true so button stays disabled while waiting
       } else {
         const req = await submitOrderRequest(orderPayload);
         setRequestId(req.id);
         setRequestStatus("waiting");
+        // COD success: keep placing=true so button stays disabled while waiting for admin
       }
     } catch (e) {
-      setOrderErr(e instanceof Error ? e.message : "Failed to place order.");
-    } finally {
+      // Only reset placing on actual error so user can retry
       setPlacing(false);
+      setOrderErr(e instanceof Error ? e.message : "Failed to place order.");
     }
   };
 
@@ -233,23 +283,19 @@ function CartPage() {
             {/* ── Order summary sidebar ── */}
             <aside className="h-fit rounded-3xl border border-border bg-card p-5 shadow-elegant space-y-4">
 
-              {/* Guest name — only when not logged in */}
+              {/* Guest — prompt to sign in */}
               {!user && (
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your name</label>
-                  <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5">
-                    <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <input
-                      value={guestName}
-                      onChange={e => setGuestName(e.target.value)}
-                      placeholder="Enter your name"
-                      className="w-full bg-transparent text-sm outline-none"
-                    />
+                <button
+                  type="button"
+                  onClick={() => setShowAuthPrompt(true)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5 text-left transition hover:bg-primary/10"
+                >
+                  <LogIn className="h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <div className="text-xs font-semibold text-primary">Sign in to place your order</div>
+                    <div className="text-[10px] text-muted-foreground">Quick sign up — takes 30 seconds</div>
                   </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    <Link to="/login" className="font-semibold text-primary underline">Sign in</Link> to save your order history.
-                  </p>
-                </div>
+                </button>
               )}
 
               {/* Logged-in user greeting */}
@@ -419,6 +465,41 @@ function CartPage() {
         )}
       </section>
 
+      {/* ── Sign-in required modal ── */}
+      <AnimatePresence>
+        {showAuthPrompt && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+            onClick={() => setShowAuthPrompt(false)}>
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 text-center shadow-elegant">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full gradient-primary">
+                <LogIn className="h-8 w-8 text-primary-foreground" />
+              </div>
+              <h3 className="font-[Fraunces] text-2xl font-black">Sign in to order</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                You need an account to place an order. It only takes 30 seconds to sign up!
+              </p>
+              <div className="mt-6 flex flex-col gap-3">
+                <Link
+                  to="/login"
+                  search={{ redirect: "/cart" } as any}
+                  className="flex items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant"
+                >
+                  <LogIn className="h-4 w-4" /> Sign in / Sign up
+                </Link>
+                <button
+                  onClick={() => setShowAuthPrompt(false)}
+                  className="rounded-full border border-border py-3 text-sm font-semibold hover:bg-accent transition">
+                  Back to cart
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Waiting for admin modal ── */}
       <AnimatePresence>
         {requestStatus === "waiting" && (
@@ -455,7 +536,7 @@ function CartPage() {
               </div>
               <h3 className="font-[Fraunces] text-2xl font-black">Food sold out 😔</h3>
               <p className="mt-2 text-sm text-muted-foreground">Sorry, the kitchen is unable to fulfil your order right now. Please come back tomorrow for fresh dishes!</p>
-              <button onClick={() => { setRequestStatus(null); setRequestId(null); }}
+              <button onClick={() => { setRequestStatus(null); setRequestId(null); setPlacing(false); }}
                 className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
                 Back to cart
               </button>
