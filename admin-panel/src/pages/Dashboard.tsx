@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
@@ -191,20 +191,64 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   const [requests, setRequests] = useState<OrderRequest[]>([]);
   const [agentError, setAgentError] = useState<string | null>(null);
 
+  // ── Singleton AudioContext — created once on first user gesture ──
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Unlock AudioContext on first user interaction (required by browsers)
+  useEffect(() => {
+    const unlock = () => {
+      if (!audioCtxRef.current) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        if (AC) audioCtxRef.current = new AC();
+      }
+      if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume();
+      }
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
   function playBeep() {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      [0, 0.2].forEach((t) => {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!audioCtxRef.current && AC) audioCtxRef.current = new AC();
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      if (ctx.state === "suspended") { ctx.resume(); return; }
+      const now = ctx.currentTime;
+      [[880, 0], [880, 0.18], [1100, 0.36]].forEach(([freq, t]) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 1000;
-        gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.18);
-        osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.18);
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now + t);
+        gain.gain.linearRampToValueAtTime(0.4, now + t + 0.01);
+        gain.gain.linearRampToValueAtTime(0, now + t + 0.14);
+        osc.start(now + t); osc.stop(now + t + 0.15);
       });
     } catch {}
   }
+
+  // ── Continuous beep while there are pending requests ──
+  const requestsRef = useRef(requests);
+  useEffect(() => { requestsRef.current = requests; }, [requests]);
+
+  useEffect(() => {
+    if (requests.length === 0) return;
+    // Play immediately, then repeat every 4 seconds until all requests are handled
+    playBeep();
+    const interval = setInterval(() => {
+      if (requestsRef.current.length > 0) playBeep();
+    }, 4000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requests.length > 0]);
 
   const loadMenu = useCallback(async () => {
     const { data } = await (supabase.from("menu_items") as any)

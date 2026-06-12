@@ -1,12 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Minus, Plus, Tag, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, LogIn, MapPin, Navigation, Clock, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { useLocation } from "@/lib/location-context";
 import { submitOrderRequest } from "@/lib/orders-store";
+import { refetchMenu } from "@/lib/menu-hook";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/cart")({
@@ -70,21 +71,94 @@ function CartPage() {
   const [payMethod, setPayMethod] = useState<"cod" | "gpay">("cod");
   const [orderErr, setOrderErr] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
-  const [requestId, setRequestId] = useState<string | null>(null);
   const [requestStatus, setRequestStatus] = useState<"waiting" | "denied" | null>(null);
 
-  // Always reset order state on fresh mount (handles back-navigation stale state)
-  useEffect(() => {
+  // Use a ref to hold the active poll/channel cleanup so it survives re-renders
+  // without being listed as a useEffect dependency
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const navigateRef = useRef(navigate);
+  const clearRef = useRef(clear);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  useEffect(() => { clearRef.current = clear; }, [clear]);
+
+  // Cancel any in-flight order watch — safe to call multiple times
+  const cancelWatch = () => {
+    if (cleanupRef.current) { cleanupRef.current(); cleanupRef.current = null; }
+  };
+
+  // Hard-reset everything: cancel watch, clear all order state
+  const resetOrderState = () => {
+    cancelWatch();
     setPlacing(false);
-    setRequestId(null);
     setRequestStatus(null);
-  }, []);
+    setOrderErr(null);
+  };
+
+  // Reset when cart becomes empty (order completed or cleared)
+  useEffect(() => {
+    if (items.length === 0) resetOrderState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
+
+  // Start watching a request ID for accept/deny — self-contained, no deps on state
+  const watchRequest = (reqId: string) => {
+    cancelWatch(); // cancel any previous watch first
+
+    let done = false;
+
+    const finish = (status: "accepted" | "denied", orderId?: string) => {
+      if (done) return;
+      done = true;
+      cancelWatch();
+      if (status === "accepted" && orderId) {
+        setPlacing(false);
+        setRequestStatus(null);
+        clearRef.current();
+        refetchMenu();
+        navigateRef.current({ to: "/track", search: { orderId } });
+      } else {
+        setPlacing(false);
+        setRequestStatus("denied");
+      }
+    };
+
+    const channel = supabase
+      .channel(`req-watch-${reqId}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "order_requests", filter: `id=eq.${reqId}` },
+        (payload) => {
+          const s = (payload.new as any).status;
+          if (s === "accepted") finish("accepted", (payload.new as any).order_id);
+          else if (s === "denied") finish("denied");
+        }
+      ).subscribe();
+
+    const poll = setInterval(async () => {
+      if (done) { clearInterval(poll); return; }
+      try {
+        const { data } = await (supabase.from("order_requests") as any)
+          .select("status,order_id").eq("id", reqId).single();
+        if (!data || done) return;
+        if (data.status === "accepted") finish("accepted", data.order_id);
+        else if (data.status === "denied") finish("denied");
+      } catch {}
+    }, 3000);
+
+    cleanupRef.current = () => {
+      done = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  };
+
+  // Cleanup on unmount
+  useEffect(() => () => { cancelWatch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [gpsAddress, setGpsAddress] = useState("");
   const [showManual, setShowManual] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
-  // pick the active (default) address once on mount
+  // Pick the active (default) address once on mount
   useEffect(() => {
     if (active && !selectedAddress) setSelectedAddress(active.address);
     const cur = saved.find(a => a.label === "Current Location");
@@ -94,74 +168,6 @@ function CartPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
-
-  // Reset placing/requestStatus when user comes back to cart after a completed order
-  useEffect(() => {
-    if (items.length === 0 && requestStatus !== "waiting") {
-      setPlacing(false);
-      setRequestStatus(null);
-      setRequestId(null);
-    }
-  }, [items.length]);
-
-  // Listen for admin accept/deny on the request (realtime + polling fallback)
-  useEffect(() => {
-    if (!requestId) return;
-
-    let cancelled = false;
-
-    // Realtime channel
-    const channel = supabase
-      .channel(`request-${requestId}`)
-      .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "order_requests", filter: `id=eq.${requestId}` },
-        (payload) => {
-          if (cancelled) return;
-          const s = (payload.new as any).status;
-          if (s === "accepted") {
-            const orderId = (payload.new as any).order_id;
-            cancelled = true;
-            supabase.removeChannel(channel);
-            navigate({ to: "/track", search: { orderId } });
-            clear();
-          } else if (s === "denied") {
-            cancelled = true;
-            supabase.removeChannel(channel);
-            setRequestStatus("denied");
-          }
-        }
-      ).subscribe();
-
-    // Polling fallback every 3s — handles cases where realtime event is missed
-    const poll = setInterval(async () => {
-      if (cancelled) { clearInterval(poll); return; }
-      try {
-        const { data } = await (supabase.from("order_requests") as any)
-          .select("status, order_id")
-          .eq("id", requestId)
-          .single();
-        if (!data || cancelled) return;
-        if (data.status === "accepted") {
-          cancelled = true;
-          clearInterval(poll);
-          supabase.removeChannel(channel);
-          navigate({ to: "/track", search: { orderId: data.order_id } });
-          clear();
-        } else if (data.status === "denied") {
-          cancelled = true;
-          clearInterval(poll);
-          supabase.removeChannel(channel);
-          setRequestStatus("denied");
-        }
-      } catch { /* ignore poll errors */ }
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(poll);
-      supabase.removeChannel(channel);
-    };
-  }, [requestId, clear, navigate]);
 
   const deliveryLocation = selectedAddress;
 
@@ -188,22 +194,18 @@ function CartPage() {
 
   const finalTotal = Math.max(0, total - discount);
 
-  const customerName = user?.name || "Guest";
-  const customerEmail = user?.email ?? null;
-
   const checkout = async () => {
-    setOrderErr(null);
     if (!user) { setShowAuthPrompt(true); return; }
-    if (!deliveryLocation) return setOrderErr("Please enter your delivery location.");
-    // Reset any previous order state before starting fresh
-    setRequestId(null);
-    setRequestStatus(null);
+    if (!deliveryLocation) { setOrderErr("Please enter your delivery location."); return; }
+
+    // Cancel any previous watch and start fresh
+    resetOrderState();
     setPlacing(true);
 
     const orderPayload = {
-      user_id: user?.id ?? null,
-      customer: customerName,
-      email: customerEmail,
+      user_id: user.id,
+      customer: user.name,
+      email: user.email ?? null,
       room: deliveryLocation,
       deliveryTime: "ASAP",
       items, subtotal, delivery_fee: delivery, gst,
@@ -224,7 +226,7 @@ function CartPage() {
             description: "Food order payment",
             method: { upi: true, card: false, netbanking: false, wallet: false },
             config: { display: { blocks: { upi: { name: "Pay via GPay / UPI", instruments: [{ method: "upi" }] } }, sequence: ["block.upi"], preferences: { show_default_blocks: false } } },
-            prefill: { name: customerName, email: customerEmail ?? "", contact: "" },
+            prefill: { name: user.name, email: user.email ?? "", contact: "" },
             theme: { color: "#c2440f" },
             handler: async (response: { razorpay_payment_id: string; razorpay_order_id?: string }) => {
               try {
@@ -233,8 +235,9 @@ function CartPage() {
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_order_id: response.razorpay_order_id ?? null,
                 });
-                setRequestId(req.id);
+                refetchMenu();
                 setRequestStatus("waiting");
+                watchRequest(req.id);
                 resolve();
               } catch (e) { reject(e); }
             },
@@ -242,15 +245,13 @@ function CartPage() {
           });
           rzp.open();
         });
-        // GPay success: keep placing=true so button stays disabled while waiting
       } else {
         const req = await submitOrderRequest(orderPayload);
-        setRequestId(req.id);
+        refetchMenu();
         setRequestStatus("waiting");
-        // COD success: keep placing=true so button stays disabled while waiting for admin
+        watchRequest(req.id);
       }
     } catch (e) {
-      // Only reset placing on actual error so user can retry
       setPlacing(false);
       setOrderErr(e instanceof Error ? e.message : "Failed to place order.");
     }
@@ -569,7 +570,7 @@ function CartPage() {
               </div>
               <h3 className="font-[Fraunces] text-2xl font-black">Food sold out 😔</h3>
               <p className="mt-2 text-sm text-muted-foreground">Sorry, the kitchen is unable to fulfil your order right now. Please come back tomorrow for fresh dishes!</p>
-              <button onClick={() => { setRequestStatus(null); setRequestId(null); setPlacing(false); }}
+              <button onClick={() => resetOrderState()}
                 className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
                 Back to cart
               </button>

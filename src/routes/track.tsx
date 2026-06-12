@@ -69,53 +69,45 @@ function TrackPage() {
   const secsLeft = useCancelCountdown(order?.created_at);
   const canCancel = secsLeft > 0 && order?.status === "Placed";
 
-  // Initial load only — fetch once by orderId, never re-fetch after that
+  // Fetch order by orderId immediately, subscribe to realtime at the same time
   useEffect(() => {
     if (!orderId) {
-      // No orderId — stop loading immediately; list view handles empty state
       setLoading(false);
       return;
     }
 
-    // Try from already-loaded myOrders first (instant, no DB call)
-    const cached = myOrders.find(o => o.id === orderId);
-    if (cached) {
-      setOrder(cached as any);
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    // Not in cache yet — fetch once from DB
+    // Subscribe to realtime FIRST so we never miss an update while fetching
+    const channel = supabase
+      .channel(`track-${orderId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${orderId}` }, (payload: any) => {
+        setOrder(prev => prev ? { ...prev, ...payload.new, items: payload.new.items as unknown as CartItem[] } : prev);
+      })
+      .subscribe();
+
+    // Fetch from DB directly — always fresh, no dependency on myOrders cache
     (supabase.from("orders") as any)
       .select("*").eq("id", orderId).single()
       .then(({ data }: any) => {
+        if (cancelled) return;
         if (data) setOrder({ ...data, items: data.items as unknown as CartItem[] });
         setLoading(false);
       });
-  // Only run on mount and when orderId changes — NOT on every myOrders update
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [orderId]);
 
-  // Sync status updates from myOrders in real-time without re-fetching
+  // Sync any status updates that arrive via myOrders realtime
   useEffect(() => {
-    if (!order?.id || !myOrders.length) return;
-    const updated = myOrders.find(o => o.id === order.id);
-    if (updated && updated.status !== order.status) {
-      setOrder(prev => prev ? { ...prev, status: updated.status } : prev);
-    }
+    if (!orderId || !myOrders.length) return;
+    const updated = myOrders.find(o => o.id === orderId);
+    if (updated) setOrder(updated as any);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myOrders]);
-
-  // Realtime channel for orders not in myOrders (e.g. guest orders)
-  useEffect(() => {
-    if (!order?.id) return;
-    const channel = supabase
-      .channel(`track-${order.id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${order.id}` }, (payload: any) => {
-        setOrder(prev => prev ? { ...prev, status: payload.new.status as OrderStatus } : prev);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [order?.id]);
 
   const handleCancel = async () => {
     if (!order || !canCancel) return;

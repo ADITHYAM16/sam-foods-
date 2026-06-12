@@ -3,40 +3,41 @@ import { supabase } from "@/integrations/supabase/client";
 import { MENU, type FoodItem } from "./menu-data";
 
 // ─── Singleton store — ONE fetch + ONE channel for the entire app lifetime ────
-// This prevents duplicate channels and stale-menu bugs when navigating between
-// bulk-order / track / home pages, which each mount/unmount their own components.
-
 let _menu: FoodItem[] = MENU;
 let _loading = true;
 let _listeners: Array<() => void> = [];
-let _initialised = false;
+let _channelReady = false;
+let _fetchPromise: Promise<void> | null = null;
 
 function notify() {
   _listeners.forEach(fn => fn());
 }
 
-function initMenuStore() {
-  if (_initialised) return;
-  _initialised = true;
-
-  const load = async () => {
-    try {
-      const { data, error } = await (supabase.from("menu_items") as any)
-        .select("id,name,description,price,rating,category,veg,image,badge,available,sold_out")
-        .order("created_at", { ascending: true });
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        _menu = data as FoodItem[];
-      }
-    } catch {
-      // keep static MENU fallback
-    } finally {
-      _loading = false;
-      notify();
+export async function refetchMenu() {
+  _loading = true;
+  notify();
+  try {
+    const { data, error } = await (supabase.from("menu_items") as any)
+      .select("id,name,description,price,rating,category,veg,image,badge,available,sold_out")
+      .order("created_at", { ascending: true });
+    if (!error && Array.isArray(data) && data.length > 0) {
+      _menu = data as FoodItem[];
     }
-  };
+  } catch {
+    // keep current menu
+  } finally {
+    _loading = false;
+    notify();
+  }
+}
 
-  load();
+function initMenuStore() {
+  if (!_fetchPromise) {
+    _fetchPromise = refetchMenu();
+  }
+
+  if (_channelReady) return;
+  _channelReady = true;
 
   // Single realtime channel — never removed while app is alive
   supabase
@@ -67,7 +68,7 @@ function initMenuStore() {
 
   // Refetch when tab regains focus — handles stale data after long idle
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) load();
+    if (!document.hidden) refetchMenu();
   });
 }
 
@@ -76,11 +77,12 @@ export function useMenu() {
   const [loading, setLoading] = useState(_loading);
 
   useEffect(() => {
-    // Initialise singleton on first use
+    // Always force a fresh fetch on mount to fix missing items bug
+    _fetchPromise = null;
     initMenuStore();
 
-    // Sync local state from singleton immediately (in case it already loaded)
-    setMenu(_menu);
+    // Sync local state from singleton immediately
+    setMenu([..._menu]);
     setLoading(_loading);
 
     // Subscribe to future updates

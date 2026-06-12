@@ -13,6 +13,7 @@ import { type FoodItem, CATEGORIES } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, assignNearestAgent, STATUS_FLOW, type OrderStatus } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveImage, resolveDescription } from "@/lib/food-image-resolver";
+import { playBeep } from "@/lib/beep";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -28,22 +29,6 @@ type BulkOrder = {
 };
 
 type Agent = { id: string; name: string; email: string; phone: string | null };
-
-// ─── Beep utility ─────────────────────────────────────────────────────────────
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    [0, 0.2].forEach((t) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = 1000;
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.18);
-      osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.18);
-    });
-  } catch {}
-}
 
 // ─── CSV Export ───────────────────────────────────────────────────────────────
 function exportOrdersCSV(orders: ReturnType<typeof useOrders>) {
@@ -299,18 +284,10 @@ function AdminPage() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const prevOrderCount = useRef(0);
-  const soundUnlocked = useRef(false);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) navigate({ to: "/owner/login" });
   }, [user, loading, navigate]);
-
-  // Unlock sound on first interaction
-  useEffect(() => {
-    const unlock = () => { soundUnlocked.current = true; };
-    window.addEventListener("pointerdown", unlock, { once: true });
-    return () => window.removeEventListener("pointerdown", unlock);
-  }, []);
 
   const [activeTab, setActiveTab] = useState<"orders" | "menu" | "bulk">("orders");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "All">("All");
@@ -334,8 +311,8 @@ function AdminPage() {
 
   // Play beep when new orders arrive
   useEffect(() => {
-    if (liveOrders.length > prevOrderCount.current && prevOrderCount.current > 0 && soundUnlocked.current) {
-      playBeep();
+    if (liveOrders.length > prevOrderCount.current && prevOrderCount.current > 0) {
+      playBeep("new-order");
     }
     prevOrderCount.current = liveOrders.length;
   }, [liveOrders.length]);

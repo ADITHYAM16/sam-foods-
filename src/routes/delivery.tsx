@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell, CheckCircle2, IndianRupee, Loader2, MapPin,
   Navigation, Package, X, Check, Bike, CreditCard,
@@ -14,6 +14,7 @@ import {
   respondToDeliveryRequest, updateOrderStatus, type OrderStatus,
 } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
+import { playBeep } from "@/lib/beep";
 
 export const Route = createFileRoute("/delivery")({
   component: DeliveryPage,
@@ -58,6 +59,29 @@ function DeliveryPage() {
   const { request, order: reqOrder } = useDeliveryRequests(user?.id);
   const [responding, setResponding] = useState(false);
   const [deniedIds, setDeniedIds] = useState<string[]>([]);
+
+  // ── Sound: ring when a new delivery request arrives, stop when gone ───────
+  const prevReqId = useRef<string | null>(null);
+  const ringTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const id = request?.id ?? null;
+    if (id && id !== prevReqId.current) {
+      // New request — play immediately then repeat every 4 s
+      prevReqId.current = id;
+      playBeep("delivery");
+      if (ringTimer.current) clearInterval(ringTimer.current);
+      ringTimer.current = setInterval(() => playBeep("delivery"), 4000);
+    } else if (!id && prevReqId.current) {
+      // Request gone — stop ringing
+      prevReqId.current = null;
+      if (ringTimer.current) { clearInterval(ringTimer.current); ringTimer.current = null; }
+    }
+    return () => {
+      if (ringTimer.current) { clearInterval(ringTimer.current); ringTimer.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.id]);
 
   // ── Commission rate from DB ────────────────────────────────────────────────
   const [commissionPct, setCommissionPct] = useState(8);

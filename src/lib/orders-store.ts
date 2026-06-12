@@ -502,6 +502,8 @@ export function useMyOrders(userId: string | null | undefined): Order[] {
   useEffect(() => {
     if (!userId) return;
 
+    const toOrder = (o: any): Order => ({ ...o, items: o.items as unknown as CartItem[] });
+
     const fetchMyOrders = async () => {
       try {
         const { data, error } = await supabase
@@ -509,7 +511,7 @@ export function useMyOrders(userId: string | null | undefined): Order[] {
           .select("*")
           .eq("user_id", userId)
           .order("created_at", { ascending: false });
-        if (!error && data) setList((data as any[]).map((o) => ({ ...o, items: o.items as unknown as CartItem[] })));
+        if (!error && data) setList(data.map(toOrder));
       } catch { /* table may not exist */ }
     };
 
@@ -520,7 +522,15 @@ export function useMyOrders(userId: string | null | undefined): Order[] {
 
     const channel = supabase
       .channel(`orders-user-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${userId}` }, fetchMyOrders)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
+        ({ new: row }) => setList(prev => [toOrder(row), ...prev])
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
+        ({ new: row }) => setList(prev => prev.map(o => o.id === (row as any).id ? toOrder(row) : o))
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
+        ({ old: row }) => setList(prev => prev.filter(o => o.id !== (row as any).id))
+      )
       .subscribe();
 
     return () => {
