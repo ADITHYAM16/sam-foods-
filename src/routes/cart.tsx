@@ -18,12 +18,21 @@ declare global {
   interface Window { Razorpay: new (opts: object) => { open(): void }; }
 }
 
-// Valid coupons — easy to extend
-const COUPONS: Record<string, number> = {
-  SAM50: 50,
-  SAM100: 100,
-  WELCOME: 30,
-};
+// Fetch coupons from DB at runtime; fallback to empty if table doesn't exist
+async function fetchCoupons(): Promise<Record<string, number>> {
+  try {
+    const { data } = await (supabase.from("coupons") as any)
+      .select("code,discount")
+      .eq("active", true);
+    if (!data || data.length === 0) return {};
+    return Object.fromEntries((data as { code: string; discount: number }[]).map(c => [c.code.toUpperCase(), c.discount]));
+  } catch {
+    return {};
+  }
+}
+
+// Static fallback coupons — used if DB table doesn't exist yet
+const STATIC_COUPONS: Record<string, number> = { SAM50: 50, SAM100: 100, WELCOME: 30 };
 
 function loadRazorpay(): Promise<boolean> {
   return new Promise(resolve => {
@@ -46,6 +55,15 @@ function CartPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [discount, setDiscount] = useState(0);
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  const [dbCoupons, setDbCoupons] = useState<Record<string, number> | null>(null);
+
+  // Validate Razorpay key on mount
+  const razorpayKeyMissing = !import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+  // Load coupons from DB once on mount
+  useEffect(() => {
+    fetchCoupons().then(c => setDbCoupons(c));
+  }, []);
 
   const [selectedAddress, setSelectedAddress] = useState(active?.address ?? "");
   const [manualLocation, setManualLocation] = useState("");
@@ -54,6 +72,13 @@ function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [requestStatus, setRequestStatus] = useState<"waiting" | "denied" | null>(null);
+
+  // Always reset order state on fresh mount (handles back-navigation stale state)
+  useEffect(() => {
+    setPlacing(false);
+    setRequestId(null);
+    setRequestStatus(null);
+  }, []);
 
   const [gpsAddress, setGpsAddress] = useState("");
   const [showManual, setShowManual] = useState(false);
@@ -142,10 +167,11 @@ function CartPage() {
 
   const applyCoupon = () => {
     const code = coupon.trim().toUpperCase();
-    if (COUPONS[code]) {
-      setDiscount(COUPONS[code]);
+    const allCoupons = { ...STATIC_COUPONS, ...(dbCoupons ?? {}) };
+    if (allCoupons[code]) {
+      setDiscount(allCoupons[code]);
       setAppliedCoupon(code);
-      setCouponMsg(`✓ "${code}" applied — ₹${COUPONS[code]} off!`);
+      setCouponMsg(`✓ "${code}" applied — ₹${allCoupons[code]} off!`);
     } else {
       setDiscount(0);
       setAppliedCoupon(null);
@@ -447,11 +473,18 @@ function CartPage() {
                 </div>
               </div>
 
+              {/* Razorpay key missing warning */}
+              {razorpayKeyMissing && payMethod === "gpay" && (
+                <div className="rounded-xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  ⚠️ GPay/UPI is not configured. Please use Cash on Delivery or contact support.
+                </div>
+              )}
+
               {orderErr && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{orderErr}</p>}
 
               <button
                 onClick={checkout}
-                disabled={placing}
+                disabled={placing || (payMethod === "gpay" && razorpayKeyMissing)}
                 className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-[1.02] disabled:opacity-60"
               >
                 {placing

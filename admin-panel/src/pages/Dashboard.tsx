@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
   IndianRupee, Pencil, Plus, ShoppingBag, Trash2,
-  Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User,
+  Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User, RefreshCw,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
@@ -89,6 +89,73 @@ function OrderRequestAlert({ req, onAccept, onDeny }: {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/* ─── Real Weekly Revenue Chart ──────────────────────────── */
+function useWeeklyRevenue() {
+  const [bars, setBars] = useState<{ day: string; total: number; pct: number }[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      const since = new Date();
+      since.setDate(since.getDate() - 6);
+      since.setHours(0, 0, 0, 0);
+      const { data } = await (supabase.from("orders") as any)
+        .select("total,created_at").gte("created_at", since.toISOString()).neq("status", "Cancelled");
+      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const buckets: Record<string, number> = {};
+      const labels: string[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        buckets[d.toISOString().slice(0, 10)] = 0;
+        labels.push(days[d.getDay()]);
+      }
+      (data ?? []).forEach((o: any) => {
+        const key = new Date(o.created_at).toISOString().slice(0, 10);
+        if (key in buckets) buckets[key] += Number(o.total);
+      });
+      const values = Object.values(buckets);
+      const max = Math.max(...values, 1);
+      setBars(Object.keys(buckets).map((k, i) => ({ day: labels[i], total: buckets[k], pct: Math.round((buckets[k] / max) * 100) })));
+    };
+    load();
+  }, []);
+  return bars;
+}
+
+function WeeklyRevenueChart() {
+  const bars = useWeeklyRevenue();
+  return (
+    <div className="rounded-3xl border border-border bg-card p-5">
+      <h2 className="mb-3 font-[Fraunces] text-xl font-bold flex items-center gap-2">
+        <BarChart3 className="h-5 w-5 text-primary" /> Weekly Revenue
+      </h2>
+      {bars.length === 0 ? (
+        <div className="flex h-44 items-center justify-center">
+          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <>
+          <div className="flex h-44 items-end gap-2">
+            {bars.map((b, i) => (
+              <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
+                <div className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-1.5 py-0.5 text-[10px] font-semibold text-background opacity-0 transition group-hover:opacity-100">
+                  ₹{b.total.toLocaleString()}
+                </div>
+                <motion.div
+                  initial={{ height: 0 }} animate={{ height: `${Math.max(b.pct, 4)}%` }}
+                  transition={{ delay: i * 0.07, type: "spring", stiffness: 120 }}
+                  className={`w-full rounded-t-lg ${b.pct > 0 ? "gradient-primary opacity-90" : "bg-border"}`}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+            {bars.map((b, i) => <span key={i}>{b.day}</span>)}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -441,21 +508,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
             )}
           </div>
 
-          <div className="rounded-3xl border border-border bg-card p-5">
-            <h2 className="mb-3 font-[Fraunces] text-xl font-bold flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary" /> Weekly Revenue
-            </h2>
-            <div className="flex h-44 items-end gap-2">
-              {[42, 58, 36, 71, 48, 88, 65].map((h, i) => (
-                <motion.div key={i} initial={{ height: 0 }} animate={{ height: `${h}%` }}
-                  transition={{ delay: i * 0.07, type: "spring", stiffness: 120 }}
-                  className="flex-1 rounded-t-lg gradient-primary opacity-90" />
-              ))}
-            </div>
-            <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-              {["M","T","W","T","F","S","S"].map((d, i) => <span key={i}>{d}</span>)}
-            </div>
-          </div>
+          <WeeklyRevenueChart />
         </div>
 
         {/* ── Manage Menu + Bulk Bookings ── */}

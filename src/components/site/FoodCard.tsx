@@ -36,11 +36,7 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
   };
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ delay: index * 0.05, duration: 0.45, ease: "easeOut" }}
+    <article
       className="group flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition hover:-translate-y-1 hover:shadow-elegant"
     >
       {/* Image */}
@@ -136,6 +132,6 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
           </div>
         </div>
       </div>
-    </motion.article>
+    </article>
   );
 }

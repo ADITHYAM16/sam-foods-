@@ -96,7 +96,16 @@ function LoginPage() {
     if (!agree) return setErr("Please accept terms & conditions.");
     setBusy(true);
     try {
-      await register({ name, email: suEmail.trim(), phone: "+91" + phoneNumber.trim(), password: password2, role: "customer" });
+      // Check for duplicate phone number
+      const normalised = "+91" + phoneNumber.trim();
+      const { data: existing } = await (supabase.from("profiles") as any)
+        .select("id")
+        .eq("phone", normalised)
+        .limit(1)
+        .maybeSingle();
+      if (existing) { setErr("This phone number is already registered. Try signing in."); setBusy(false); return; }
+
+      await register({ name, email: suEmail.trim(), phone: normalised, password: password2, role: "customer" });
       navigate({ to: redirect as any || "/" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Registration failed. Please try again.");
@@ -193,7 +202,7 @@ function LoginPage() {
                     </div>
                     <label className="flex items-start gap-2 text-xs text-muted-foreground">
                       <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} className="mt-0.5 accent-primary" />
-                      I agree to the <a href="#" className="text-primary hover:underline">Terms</a> & <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                      I agree to the <Link to="/terms" className="text-primary hover:underline">Terms</Link> & <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
                     </label>
                     {err && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{err}</p>}
                     <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant disabled:opacity-60">

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LogOut, Menu, Moon, ShoppingBag, Sun, User as UserIcon, X, Home, UtensilsCrossed, MapPin, Navigation, Trash2, Check } from "lucide-react";
+import { LogOut, Menu, Moon, ShoppingBag, Sun, User as UserIcon, X, Home, UtensilsCrossed, MapPin, Navigation, Trash2, Check, ClipboardList, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
@@ -194,6 +194,11 @@ export function Navbar() {
     { to: "/track", label: "Track Order", icon: MapPin },
   ];
 
+  const userNavLinks = [
+    { to: "/orders", label: "My Orders", icon: ClipboardList },
+    { to: "/profile", label: "My Profile", icon: Settings },
+  ];
+
   return (
     <>
       <header className="sticky top-0 z-50">
@@ -271,6 +276,11 @@ export function Navbar() {
                           <div className="mt-1 inline-flex rounded-full bg-accent px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-foreground">{user.role}</div>
                         </div>
                         <hr className="my-1 border-border" />
+                        {user.role === "customer" && userNavLinks.map(l => (
+                          <Link key={l.to} to={l.to} onClick={() => setUserOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-accent">
+                            <l.icon className="h-4 w-4 text-muted-foreground" /> {l.label}
+                          </Link>
+                        ))}
                         {user.role === "admin" && <Link to="/admin" onClick={() => setUserOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-accent">Admin Dashboard</Link>}
                         {user.role === "delivery" && <Link to="/delivery" onClick={() => setUserOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-accent">Delivery Dashboard</Link>}
                         <button onClick={() => { logout(); setUserOpen(false); navigate({ to: "/login", search: { redirect: "/" } } as any); }}
@@ -310,6 +320,12 @@ export function Navbar() {
               {/* Nav links */}
               <nav className="mt-4 flex-1 overflow-y-auto space-y-1 px-3">
                 {navLinks.map((l) => (
+                  <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${path === l.to ? "gradient-primary text-primary-foreground" : "hover:bg-accent"}`}>
+                    <l.icon className="h-4 w-4" /> {l.label}
+                  </Link>
+                ))}
+                {user?.role === "customer" && userNavLinks.map((l) => (
                   <Link key={l.to} to={l.to} onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${path === l.to ? "gradient-primary text-primary-foreground" : "hover:bg-accent"}`}>
                     <l.icon className="h-4 w-4" /> {l.label}

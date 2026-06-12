@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bike, CheckCircle2, ChefHat, Package, PackageCheck, Phone, Loader2, XCircle, Ban } from "lucide-react";
+import { Bike, CheckCircle2, ChefHat, Package, PackageCheck, Phone, Loader2, XCircle, Ban, ArrowLeft, Clock as ClockIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,9 +43,19 @@ function useCancelCountdown(createdAt: string | undefined) {
   return secsLeft;
 }
 
+const STATUS_COLOR: Record<string, string> = {
+  Placed: "bg-violet-500/10 text-violet-600",
+  Preparing: "bg-amber-500/10 text-amber-600",
+  Ready: "bg-blue-500/10 text-blue-600",
+  "Out for delivery": "bg-blue-600/10 text-blue-700",
+  Delivered: "bg-emerald-600/10 text-emerald-600",
+  Cancelled: "bg-destructive/10 text-destructive",
+};
+
 function TrackPage() {
   const { orderId } = Route.useSearch();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const myOrders = useMyOrders(user?.id);
   const [order, setOrder] = useState<{
     id: string; status: OrderStatus; customer: string; room: string;
@@ -62,11 +72,8 @@ function TrackPage() {
   // Initial load only — fetch once by orderId, never re-fetch after that
   useEffect(() => {
     if (!orderId) {
-      // No orderId in URL — wait for myOrders to populate
-      if (myOrders.length > 0) {
-        setOrder(myOrders[0] as any);
-        setLoading(false);
-      }
+      // No orderId — stop loading immediately; list view handles empty state
+      setLoading(false);
       return;
     }
 
@@ -137,14 +144,84 @@ function TrackPage() {
     );
   }
 
+  // No orderId specified — show all orders list
+  if (!orderId && !order) {
+    const activeOrders = myOrders.filter(o => !["Delivered", "Cancelled"].includes(o.status));
+    const recentOrders = myOrders.slice(0, 10);
+    return (
+      <SiteShell>
+        <section className="mx-auto max-w-4xl px-4 py-12 md:px-6">
+          <div className="mb-2 text-xs font-bold uppercase tracking-[0.25em] text-primary">Track</div>
+          <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">Your Orders</h1>
+          {!user && (
+            <div className="mt-6 rounded-3xl border border-dashed border-border bg-card p-12 text-center">
+              <Package className="mx-auto h-12 w-12 text-muted-foreground" />
+              <p className="mt-4 text-lg font-semibold">Sign in to track your orders</p>
+              <Link to="/login" search={{ redirect: "/track" } as any} className="mt-4 inline-flex rounded-full gradient-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
+                Sign in
+              </Link>
+            </div>
+          )}
+          {user && activeOrders.length === 0 && recentOrders.length === 0 && (
+            <div className="mt-6 rounded-3xl border border-dashed border-border bg-card p-16 text-center">
+              <Package className="mx-auto h-12 w-12 text-muted-foreground" />
+              <p className="mt-4 text-lg font-semibold">No orders yet.</p>
+              <Link to="/" className="mt-4 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">Order now</Link>
+            </div>
+          )}
+          {user && recentOrders.length > 0 && (
+            <div className="mt-6 space-y-3">
+              {activeOrders.length > 0 && (
+                <div className="mb-2 flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-400">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                  </span>
+                  {activeOrders.length} active order{activeOrders.length !== 1 ? "s" : ""}
+                </div>
+              )}
+              {recentOrders.map(o => (
+                <button
+                  key={o.id}
+                  onClick={() => navigate({ to: "/track", search: { orderId: o.id } })}
+                  className="flex w-full items-start gap-4 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/40 hover:shadow-sm"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8).toUpperCase()}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLOR[o.status] ?? "bg-muted"}`}>{o.status}</span>
+                      {!["Delivered", "Cancelled"].includes(o.status) && (
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">{o.items.map(it => `${it.name} ×${it.qty}`).join(", ")}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">📍 {o.room}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-bold">₹{o.total}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>
+                  </div>
+                </button>
+              ))}
+              <Link to="/orders" className="block pt-2 text-center text-sm font-semibold text-primary hover:underline">View full order history →</Link>
+            </div>
+          )}
+        </section>
+      </SiteShell>
+    );
+  }
+
   if (!order) {
     return (
       <SiteShell>
         <section className="mx-auto max-w-5xl px-4 py-12 md:px-6">
           <div className="rounded-3xl border border-dashed border-border bg-card p-16 text-center">
             <Package className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-lg font-semibold">No active order found.</p>
-            <Link to="/" className="mt-6 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">Order now</Link>
+            <p className="mt-4 text-lg font-semibold">Order not found.</p>
+            <Link to="/track" className="mt-6 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">View all orders</Link>
           </div>
         </section>
       </SiteShell>
@@ -154,6 +231,12 @@ function TrackPage() {
   return (
     <SiteShell>
       <section className="mx-auto max-w-5xl px-4 py-12 md:px-6">
+        <button
+          onClick={() => navigate({ to: "/track" })}
+          className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition"
+        >
+          <ArrowLeft className="h-4 w-4" /> All orders
+        </button>
         <div className={`rounded-3xl border p-6 shadow-elegant md:p-10 transition-colors duration-700 ${
           order.status === "Delivered"
             ? "border-emerald-500/40 bg-emerald-500/15"

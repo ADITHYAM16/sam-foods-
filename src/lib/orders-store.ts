@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CartItem } from "./cart-context";
+import { playBeep } from "./beep";
 
 export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered" | "Cancelled";
 
@@ -128,7 +129,8 @@ export async function assignNearestAgent(orderId: string) {
   await (supabase.from("delivery_requests") as any).insert(rows);
 }
 
-// Kept for deny-cascade: when agent denies, send to next eligible agent
+// Kept for deny-cascade: when agent denies, send to next eligible agent.
+// If NO eligible agents remain, flag the order with a note so admin can act.
 export async function sendDeliveryRequestToNext(orderId: string, excludeAgentIds: string[]) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -136,10 +138,15 @@ export async function sendDeliveryRequestToNext(orderId: string, excludeAgentIds
   const { data: agents } = await (supabase.from("delivery_agents") as any)
     .select("id").eq("active", true);
 
-  if (!agents || agents.length === 0) return;
+  const eligible = ((agents ?? []) as { id: string }[]).filter(a => !excludeAgentIds.includes(a.id));
 
-  const eligible = (agents as { id: string }[]).filter(a => !excludeAgentIds.includes(a.id));
-  if (eligible.length === 0) return;
+  // ── No agents left: write a note into delivery_time so admin sees it ──
+  if (eligible.length === 0) {
+    await (supabase.from("orders") as any)
+      .update({ delivery_time: "⚠️ No agents available — manual assign needed" })
+      .eq("id", orderId);
+    return;
+  }
 
   const counts: { id: string; count: number }[] = await Promise.all(
     eligible.map(async (a) => {
@@ -392,16 +399,12 @@ export function useDeliveryOrders(agentId?: string | null): { orders: Order[]; l
   const [newAlert, setNewAlert] = useState<Order | null>(null);
   const prevIds = useRef<Set<string>>(new Set());
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayISO = todayStart.toISOString();
   const toOrder = (o: any): Order => ({ ...o, items: o.items as unknown as CartItem[] });
 
-  // Single source of truth: fetch orders via accepted delivery_requests only
+  // Fetch ALL orders this agent has accepted (no date cap — enables full history)
   const fetchOrders = useCallback(async () => {
     if (!agentId) { setLoading(false); return; }
     try {
-      // Step 1: get order_ids this agent has accepted
       const { data: accepted } = await (supabase.from("delivery_requests") as any)
         .select("order_id")
         .eq("agent_id", agentId)
@@ -411,12 +414,9 @@ export function useDeliveryOrders(agentId?: string | null): { orders: Order[]; l
 
       const orderIds = (accepted as { order_id: string }[]).map(r => r.order_id);
 
-      // Step 2: fetch those orders
       const { data, error } = await (supabase.from("orders") as any)
         .select("*")
         .in("id", orderIds)
-        .in("status", ["Ready", "Out for delivery", "Delivered"])
-        .gte("created_at", todayISO)
         .order("created_at", { ascending: false });
 
       if (!error && data) {
@@ -424,7 +424,7 @@ export function useDeliveryOrders(agentId?: string | null): { orders: Order[]; l
         mapped.forEach((o: Order) => {
           if (o.status === "Ready" && !prevIds.current.has(o.id)) {
             setNewAlert(o);
-            try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch {}
+            playBeep("delivery");
           }
         });
         prevIds.current = new Set(mapped.map((o: Order) => o.id));
@@ -461,7 +461,7 @@ export function useDeliveryOrders(agentId?: string | null): { orders: Order[]; l
               if (o.status === "Ready" && !prevIds.current.has(o.id)) {
                 setNewAlert(o);
                 prevIds.current = new Set([...prevIds.current, o.id]);
-                try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch {}
+                playBeep("delivery");
               }
             }
           }

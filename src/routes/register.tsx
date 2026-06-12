@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Loader2, Lock, Mail, Phone, User } from "lucide-react";
 import { AuthShell } from "@/components/site/AuthShell";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 import { Field } from "./login";
 
 export const Route = createFileRoute("/register")({
@@ -33,6 +34,14 @@ function RegisterPage() {
     if (!agree) return setErr("Please accept terms & conditions.");
     setLoading(true);
     try {
+      // Check for duplicate phone number
+      const { data: existing } = await (supabase.from("profiles") as any)
+        .select("id")
+        .eq("phone", phone.trim())
+        .limit(1)
+        .maybeSingle();
+      if (existing) { setErr("This phone number is already registered. Try signing in."); setLoading(false); return; }
+
       await register({ name, email, phone, password: pw, role: "customer" });
       navigate({ to: "/" });
     } catch (e) {
@@ -54,7 +63,7 @@ function RegisterPage() {
         </div>
         <label className="flex items-start gap-2 text-sm text-muted-foreground">
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 accent-primary" />
-          <span>I agree to the <a className="text-primary hover:underline" href="#">Terms</a> & <a className="text-primary hover:underline" href="#">Privacy Policy</a>.</span>
+          <span>I agree to the <Link to="/terms" className="text-primary hover:underline">Terms</Link> & <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.</span>
         </label>
         {err && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>}
         <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition hover:opacity-95 disabled:opacity-60">

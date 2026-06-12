@@ -264,8 +264,8 @@ function Index() {
               <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
                 {filtered.map((m, i) => (
                   <motion.div key={m.id} className="flex w-full"
-                    initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }} transition={{ delay: i * 0.03 }}>
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}>
                     <FoodCard item={m} index={i} />
                   </motion.div>
                 ))}
@@ -312,8 +312,7 @@ function Index() {
                     {items.map((m, i) => (
                       <motion.div key={m.id} className="flex w-full"
                         initial={{ opacity: 0, y: 24, scale: 0.96 }}
-                        whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                        viewport={{ once: true, margin: "-30px" }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
                         transition={{ delay: i * 0.04, duration: 0.4, ease: "easeOut" }}
                       >
                         <FoodCard item={m} index={i} />
