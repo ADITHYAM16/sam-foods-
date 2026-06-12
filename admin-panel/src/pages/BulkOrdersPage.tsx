@@ -408,8 +408,11 @@ export function BulkOrdersPage({ onNavigate }: { onNavigate?: (tab: AdminTab) =>
               {filtered.map((o) => (
                 <motion.div key={o.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.97 }} layout
-                  className={`rounded-3xl border bg-card p-5 shadow-sm transition hover:shadow-elegant cursor-pointer ${
-                    o.status === "Pending" ? "border-amber-400/40" : "border-border"
+                  className={`rounded-3xl border p-5 shadow-sm transition hover:shadow-elegant cursor-pointer ${
+                    o.status === "Pending" ? "border-amber-400/40 bg-card" :
+                    o.status === "Confirmed" ? "border-emerald-500/40 bg-emerald-500/10" :
+                    o.status === "Denied" || o.status === "Cancelled" ? "border-destructive/40 bg-destructive/10" :
+                    "border-border bg-card"
                   }`}
                   onClick={() => setViewingId(o.id)}>
                   {o.status === "Pending" && (

@@ -246,12 +246,17 @@ function RootComponent() {
   // Only show splash on first visit, not on refresh (SSR-safe)
   const [splash, setSplash] = useState(() => {
     if (typeof window === "undefined") return false;
-    return !sessionStorage.getItem("sam_visited");
+    // Always show on fresh page load — sessionStorage persists within tab reloads
+    // Remove key on mount so next reload always shows splash
+    const seen = sessionStorage.getItem("sam_splash_done");
+    sessionStorage.removeItem("sam_splash_done");
+    return !seen;
   });
   const router = useRouter();
 
   useEffect(() => {
-    if (splash) sessionStorage.setItem("sam_visited", "1");
+    // Mark done only after splash finishes so a mid-splash reload shows it again
+    if (!splash) sessionStorage.setItem("sam_splash_done", "1");
   }, [splash]);
 
   // Handle Supabase OAuth redirect — the hash contains access_token after Google sign-in

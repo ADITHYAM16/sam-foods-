@@ -133,11 +133,27 @@
 }
 
 @layer base {
-  * {
-    border-color: var(--color-border);
+  /* Strict overflow prevention */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  html {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
+    position: relative;
   }
 
   body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    position: relative;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -147,6 +163,19 @@
   h1, h2, h3, h4, h5 {
     font-family: 'Fraunces', ui-serif, Georgia, serif;
     letter-spacing: -0.02em;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  section, div, main, header, footer, nav, aside, article {
+    max-width: 100%;
+    min-width: 0;
   }
 }
 
@@ -167,5 +196,12 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

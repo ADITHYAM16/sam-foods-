@@ -8,7 +8,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
     <div className="min-h-screen bg-background text-foreground">
       <div className="grid min-h-screen md:grid-cols-2">
         <div className="relative hidden overflow-hidden md:block">
-          <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1400&q=80" alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=1400&q=80" alt="" className="absolute inset-0 h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-primary/40" />
           <motion.div animate={{ y: [0, -14, 0] }} transition={{ duration: 6, repeat: Infinity }} className="absolute bottom-12 left-12 right-12 text-primary-foreground">
             <Link to="/" className="inline-flex items-center gap-2">

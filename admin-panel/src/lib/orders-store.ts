@@ -103,14 +103,14 @@ export async function assignNearestAgent(orderId: string): Promise<string | null
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus) {
-  const { error } = await (supabase.from("orders") as any).update({ status }).eq("id", id);
+  const { error } = await (adminClient.from("orders") as any).update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
 export async function advanceOrder(id: string) {
-  const { data } = await supabase.from("orders").select("status").eq("id", id).single();
+  const { data } = await (adminClient.from("orders") as any).select("status").eq("id", id).single();
   if (!data) return;
-  const i = STATUS_FLOW.indexOf(data.status as OrderStatus);
+  const i = STATUS_FLOW.indexOf((data as any).status as OrderStatus);
   const next = STATUS_FLOW[Math.min(i + 1, STATUS_FLOW.length - 1)];
   await updateOrderStatus(id, next);
 }
@@ -121,20 +121,31 @@ export function useOrders(): Order[] {
   useEffect(() => {
     const toOrder = (o: any): Order => ({ ...o, items: o.items as unknown as CartItem[] });
 
-    (supabase.from("orders") as any)
+    // Use adminClient to bypass RLS for the initial fetch
+    (adminClient.from("orders") as any)
       .select("*")
       .order("created_at", { ascending: false })
       .then(({ data }: any) => {
         if (data) setList(data.map(toOrder));
       });
 
+    // Use anon supabase for realtime — service role cannot receive postgres_changes
     const channel = supabase
       .channel("orders-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" },
         ({ new: row }) => setList(prev => [toOrder(row), ...prev])
       )
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" },
-        ({ new: row }) => setList(prev => prev.map(o => o.id === (row as any).id ? toOrder(row) : o))
+        ({ new: row }) => {
+          const updated = toOrder(row);
+          setList(prev => {
+            if (prev.some(o => o.id === updated.id)) {
+              return prev.map(o => o.id === updated.id ? updated : o);
+            }
+            // Row appeared via realtime but wasn't in initial fetch — add it
+            return [updated, ...prev];
+          });
+        }
       )
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" },
         ({ old: row }) => setList(prev => prev.filter(o => o.id !== (row as any).id))

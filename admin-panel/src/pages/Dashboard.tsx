@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
   IndianRupee, Pencil, Plus, ShoppingBag, Trash2,
-  Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User, RefreshCw,
+  Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User, RefreshCw, Activity,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
@@ -94,13 +94,13 @@ function OrderRequestAlert({ req, onAccept, onDeny }: {
 
 /* ─── Real Weekly Revenue Chart ──────────────────────────── */
 function useWeeklyRevenue() {
-  const [bars, setBars] = useState<{ day: string; total: number; pct: number }[]>([]);
+  const [bars, setBars] = useState<{ day: string; total: number; pct: number }[] | null>(null);
   useEffect(() => {
     const load = async () => {
       const since = new Date();
       since.setDate(since.getDate() - 6);
       since.setHours(0, 0, 0, 0);
-      const { data } = await (supabase.from("orders") as any)
+      const { data } = await (adminClient.from("orders") as any)
         .select("total,created_at").gte("created_at", since.toISOString()).neq("status", "Cancelled");
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const buckets: Record<string, number> = {};
@@ -123,6 +123,8 @@ function useWeeklyRevenue() {
   return bars;
 }
 
+const CHART_HEIGHT_PX = 280;
+
 function WeeklyRevenueChart() {
   const bars = useWeeklyRevenue();
   return (
@@ -130,28 +132,34 @@ function WeeklyRevenueChart() {
       <h2 className="mb-3 font-[Fraunces] text-xl font-bold flex items-center gap-2">
         <BarChart3 className="h-5 w-5 text-primary" /> Weekly Revenue
       </h2>
-      {bars.length === 0 ? (
+      {bars === null ? (
         <div className="flex h-44 items-center justify-center">
           <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
-          <div className="flex h-44 items-end gap-2">
-            {bars.map((b, i) => (
-              <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
-                <div className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-1.5 py-0.5 text-[10px] font-semibold text-background opacity-0 transition group-hover:opacity-100">
-                  ₹{b.total.toLocaleString()}
+          <div style={{ height: `${CHART_HEIGHT_PX}px` }} className="flex items-end gap-2 w-full">
+            {bars.map((b, i) => {
+              const barPx = Math.max(Math.round((b.pct / 100) * CHART_HEIGHT_PX), 14);
+              return (
+                <div key={i} className="group relative flex flex-1 flex-col items-center" style={{ height: `${CHART_HEIGHT_PX}px`, justifyContent: "flex-end" }}>
+                  <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-1.5 py-0.5 text-[10px] font-semibold text-background opacity-0 transition group-hover:opacity-100"
+                    style={{ bottom: `${barPx + 4}px` }}>
+                    ₹{b.total.toLocaleString()}
+                  </div>
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: barPx }}
+                    transition={{ delay: i * 0.07, type: "spring", stiffness: 120, damping: 14 }}
+                    className={`w-full rounded-t-lg ${b.total > 0 ? "gradient-primary opacity-90" : "bg-muted"}`}
+                    style={{ minHeight: 14 }}
+                  />
                 </div>
-                <motion.div
-                  initial={{ height: 0 }} animate={{ height: `${Math.max(b.pct, 4)}%` }}
-                  transition={{ delay: i * 0.07, type: "spring", stiffness: 120 }}
-                  className={`w-full rounded-t-lg ${b.pct > 0 ? "gradient-primary opacity-90" : "bg-border"}`}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-            {bars.map((b, i) => <span key={i}>{b.day}</span>)}
+            {bars.map((b, i) => <span key={i} className="flex-1 text-center">{b.day}</span>)}
           </div>
         </>
       )}
@@ -269,7 +277,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       });
 
     // Load pending/accepted bulk orders once
-    supabase.from("bulk_orders" as any).select("id,name,people,date,status")
+    adminClient.from("bulk_orders" as any).select("id,name,people,date,status")
       .in("status", ["Pending", "Accepted"]).order("created_at", { ascending: false }).limit(10)
       .then(({ data }) => { if (data) setBulkOrders(data as any); });
 
@@ -313,7 +321,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       .subscribe();
 
     // ── bulk_orders realtime — IN-PLACE patch ──
-    const bulkCh = supabase.channel("adm-bulk")
+    const bulkCh = adminClient.channel("adm-bulk")
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "bulk_orders" },
         ({ new: row }) => {
@@ -346,7 +354,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
     return () => {
       supabase.removeChannel(menuCh);
       adminClient.removeChannel(reqCh);
-      supabase.removeChannel(bulkCh);
+      adminClient.removeChannel(bulkCh);
     };
   }, [loadMenu]);
 
@@ -388,8 +396,10 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   }
 
   async function toggleSoldOut(id: string, current: boolean) {
-    await (supabase.from("menu_items") as any)
-      .update({ sold_out: !current }).eq("id", id);
+    const next = !current;
+    // Optimistic update — flip instantly in UI
+    setItems(prev => prev.map(it => it.id === id ? { ...it, sold_out: next } : it));
+    await (adminClient.from("menu_items") as any).update({ sold_out: next }).eq("id", id);
   }
 
   async function saveItem() {
@@ -476,17 +486,14 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           ))}
         </div>
 
-        {/* ── Live orders + Weekly revenue ── */}
+        {/* ── Live orders + Weekly revenue + Bulk Bookings ── */}
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 rounded-3xl border border-border bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-[Fraunces] text-xl font-bold">Live Orders</h2>
-              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600">
-                <span className="relative grid h-2 w-2">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/70" />
-                  <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                Real-time
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                <Activity className="h-3 w-3 animate-pulse" />
+                Live Sync
               </span>
             </div>
             {liveOrders.length === 0 ? (
@@ -555,9 +562,9 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           <WeeklyRevenueChart />
         </div>
 
-        {/* ── Manage Menu + Bulk Bookings ── */}
-        <div className="mt-8 grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl border border-border bg-card p-5">
+        {/* ── Manage Menu ── */}
+        <div className="mt-8">
+          <div className="rounded-3xl border border-border bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
                 <ChefHat className="h-5 w-5 text-primary" /> Manage Menu
@@ -568,56 +575,50 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               </button>
             </div>
             <div className="max-h-[480px] overflow-y-auto pr-1">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {items.map((it) => (
-                  <div key={it.id} className={`flex items-center gap-3 rounded-2xl border p-2 transition ${it.sold_out ? "border-destructive/30 bg-destructive/5" : "border-border"}`}>
-                    <div className="relative shrink-0">
-                      <img src={it.image} alt={it.name} className={`h-14 w-14 rounded-xl object-cover ${it.sold_out ? "brightness-50" : ""}`} />
-                      {it.sold_out && (
-                        <span className="absolute inset-0 flex items-center justify-center rounded-xl">
-                          <span className="text-[9px] font-black text-white uppercase">Sold Out</span>
-                        </span>
-                      )}
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {[...items].sort((a, b) => a.name.localeCompare(b.name)).map((it) => (
+                  <div key={it.id} className={`rounded-2xl border p-3 transition ${it.sold_out ? "border-destructive/30 bg-destructive/5" : "border-border"}`}>
+                    {/* Top row: image + name + category */}
+                    <div className="flex items-center gap-3">
+                      <div className="relative shrink-0">
+                        <img src={it.image} alt={it.name} className={`h-14 w-14 rounded-xl object-cover ${it.sold_out ? "brightness-50" : ""}`} />
+                        {it.sold_out && (
+                          <span className="absolute inset-0 flex items-center justify-center rounded-xl">
+                            <span className="text-[9px] font-black text-white uppercase">Sold Out</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold leading-tight">{it.name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{it.category} · ₹{it.price}</div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold leading-tight truncate">{it.name}</div>
-                      <div className="text-xs text-muted-foreground">{it.category} · ₹{it.price}</div>
+                    {/* Bottom row: action buttons */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <button onClick={() => toggleSoldOut(it.id, !!it.sold_out)}
+                        className={`cursor-pointer flex-1 rounded-full py-1.5 text-[11px] font-bold transition active:scale-95 ${
+                          it.sold_out
+                            ? "bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white"
+                            : "bg-destructive/10 text-destructive hover:bg-destructive hover:text-white"
+                        }`}>
+                        {it.sold_out ? "Release" : "Sold Out"}
+                      </button>
+                      <button onClick={() => setEditing(it)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-accent transition">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => deleteItem(it.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-destructive hover:bg-destructive/10 transition">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    {/* Sold out / Release toggle */}
-                    <button onClick={() => toggleSoldOut(it.id, !!it.sold_out)}
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold transition ${it.sold_out ? "bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600/20" : "bg-destructive/10 text-destructive hover:bg-destructive/20"}`}>
-                      {it.sold_out ? "Release" : "Sold Out"}
-                    </button>
-                    <button onClick={() => setEditing(it)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-accent transition">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => deleteItem(it.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-destructive hover:bg-destructive/10 transition">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-
-          <div className="rounded-3xl border border-border bg-card p-5">
-            <h2 className="mb-3 font-[Fraunces] text-xl font-bold">Bulk Bookings</h2>
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {bulkOrders.length === 0 && <p className="text-sm text-muted-foreground">No bulk bookings yet.</p>}
-              {bulkOrders.map((b) => (
-                <div key={b.id} className="rounded-2xl border border-border p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{b.name}</span>
-                    <StatusPill s={b.status} />
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">{b.people} guests · {b.date}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* ── View Order Modal ── */}
+
         {viewOrder && (
           <div onClick={() => setViewOrder(null)} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
             <motion.div initial={{ y: 20, opacity: 0, scale: 0.97 }} animate={{ y: 0, opacity: 1, scale: 1 }}
