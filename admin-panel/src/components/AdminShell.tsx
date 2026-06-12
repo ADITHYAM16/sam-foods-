@@ -298,7 +298,6 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                       key={id}
                       onClick={(e) => {
                         e.preventDefault();
-                        console.log('Clicked:', id);
                         handleDeliveryTabChange(id);
                         setDrawerOpen(false);
                       }}

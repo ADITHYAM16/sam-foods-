@@ -99,11 +99,9 @@ function DeliveryPage() {
   };
 
   const handleDeliveryTabChange = (tab: DeliveryTab) => {
-    console.log('Parent received:', tab);
     setActiveTab(tab);
   };
 
-  console.log('Current activeTab:', activeTab);
   const today = new Date().toISOString().slice(0, 10);
   const activeOrders = orders.filter(o => o.status === "Out for delivery");
   const readyOrders  = orders.filter(o => o.status === "Ready");
