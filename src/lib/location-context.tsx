@@ -1,4 +1,22 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+
+export const SAM_FOODS_LAT = 11.494775161299012;
+export const SAM_FOODS_LNG = 78.02874317260576;
+export const DELIVERY_RADIUS_KM = 10;
+
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function isWithinDeliveryRadius(lat: number, lng: number): boolean {
+  return haversineKm(SAM_FOODS_LAT, SAM_FOODS_LNG, lat, lng) <= DELIVERY_RADIUS_KM;
+}
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 

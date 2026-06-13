@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
-import { useLocation } from "@/lib/location-context";
+import { useLocation, isWithinDeliveryRadius } from "@/lib/location-context";
 import { submitOrderRequest } from "@/lib/orders-store";
 import { refetchMenu } from "@/lib/menu-hook";
 import { supabase } from "@/integrations/supabase/client";
@@ -197,6 +197,29 @@ function CartPage() {
   const checkout = async () => {
     if (!user) { setShowAuthPrompt(true); return; }
     if (!deliveryLocation) { setOrderErr("Please enter your delivery location."); return; }
+
+    // Validate delivery radius
+    const addrEntry = saved.find((a) => a.address === deliveryLocation);
+    let withinRadius: boolean | null = null;
+    if (addrEntry?.lat != null && addrEntry?.lng != null) {
+      withinRadius = isWithinDeliveryRadius(addrEntry.lat, addrEntry.lng);
+    } else {
+      // Geocode the text address via Nominatim
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(deliveryLocation)}&format=json&limit=1`
+        );
+        const results = await res.json();
+        if (results?.[0]) {
+          withinRadius = isWithinDeliveryRadius(parseFloat(results[0].lat), parseFloat(results[0].lon));
+        }
+      } catch { /* allow order if geocode fails */ }
+    }
+
+    if (withinRadius === false) {
+      setOrderErr("📍 Out of delivery radius — SAM Foods only delivers within 10 km of the restaurant.");
+      return;
+    }
 
     // Cancel any previous watch and start fresh
     resetOrderState();
