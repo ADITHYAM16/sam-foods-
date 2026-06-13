@@ -118,8 +118,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
 (function(){
   try{
     var t=localStorage.getItem('sam_theme');
-    var dark=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if(dark)document.documentElement.classList.add('dark');
+    if(t==='dark')document.documentElement.classList.add('dark');
+    else{document.documentElement.classList.remove('dark');localStorage.setItem('sam_theme','light');}
   }catch(e){}
 })();
         `}} />
@@ -289,7 +289,7 @@ function RootComponent() {
         <LocationProvider>
           <CartProvider>
             <AnimatePresence mode="wait">
-              {splash && (
+              {splash ? (
                 <SplashScreen
                   key="splash"
                   onDone={() => {
@@ -302,11 +302,12 @@ function RootComponent() {
                     }
                   }}
                 />
+              ) : (
+                <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+                  <Outlet />
+                </motion.div>
               )}
             </AnimatePresence>
-            <div style={{ display: splash ? "none" : "block" }}>
-              <Outlet />
-            </div>
           </CartProvider>
         </LocationProvider>
       </AuthProvider>

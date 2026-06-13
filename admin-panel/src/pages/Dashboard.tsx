@@ -486,6 +486,49 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
     await (supabase.from("menu_items") as any).delete().eq("id", id);
   }
 
+  // Map of known item IDs to their local /food/ image paths
+  const LOCAL_IMAGES: Record<string, string> = {
+    bf1:  "/food/IDLY.jpeg",
+    bf2:  "/food/kal dosa.jpeg",
+    bf3:  "/food/NYC dosa.jpeg",
+    bf4:  "/food/plain dosa.jpeg",
+    bf5:  "/food/masala dosa.jpeg",
+    bf6:  "/food/podi dosa.jpeg",
+    bf7:  "/food/onion uththappam.jpeg",
+    bf8:  "/food/plain dosa.jpeg",
+    bf9:  "/food/pongal.jpeg",
+    bf10: "/food/kitchadi.jpeg",
+    bf11: "/food/upma.jpeg",
+    bf12: "/food/keerai dosa.jpeg",
+    bf13: "/food/ravi rotti.jpeg",
+    bf14: "/food/mysore masala dosa.jpeg",
+    bf15: "/food/Thakkali dosa.jpeg",
+    sn1:  "/food/medu vadai.jpeg",
+    sn2:  "/food/kara vadai.jpeg",
+    ml1:  "/food/full meal.jpeg",
+    ml2:  "/food/half meals.jpeg",
+    rb1:  "/food/mushroom biriyani.jpeg",
+    rb2:  "/food/veg biryani.jpeg",
+    rb3:  "/food/Ghee rice.jpeg",
+    rb4:  "/food/tomato rice.jpeg",
+    rb5:  "/food/curd rice.jpeg",
+    rb6:  "/food/lemon rice.jpeg",
+    rb7:  "/food/puli rice.jpeg",
+    sp1:  "/food/kothu parotta.jpeg",
+    ds1:  "/food/kesari.jpeg",
+  };
+
+  const [fixingImages, setFixingImages] = useState(false);
+  async function fixAllImages() {
+    setFixingImages(true);
+    const updates = Object.entries(LOCAL_IMAGES).map(([id, image]) =>
+      (adminClient.from("menu_items") as any).update({ image }).eq("id", id)
+    );
+    await Promise.all(updates);
+    await loadMenu();
+    setFixingImages(false);
+  }
+
   const stats = [
     { label: "Today's Revenue", value: `₹${todayRev.toLocaleString()}`, icon: IndianRupee, trend: "Live" },
     { label: "Orders", value: String(liveOrders.length), icon: ShoppingBag, trend: "Live" },
@@ -759,10 +802,20 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
                 <ChefHat className="h-5 w-5 text-primary" /> Manage Menu
               </h2>
-              <button onClick={() => setEditing({ id: "new", name: "", description: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "" })}
-                className="inline-flex items-center gap-1 rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
-                <Plus className="h-3.5 w-3.5" /> Add item
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fixAllImages}
+                  disabled={fixingImages}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent transition disabled:opacity-60"
+                >
+                  {fixingImages ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  {fixingImages ? "Fixing…" : "Fix Images"}
+                </button>
+                <button onClick={() => setEditing({ id: "new", name: "", description: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "" })}
+                  className="inline-flex items-center gap-1 rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
+                  <Plus className="h-3.5 w-3.5" /> Add item
+                </button>
+              </div>
             </div>
             <div className="max-h-[480px] overflow-y-auto pr-1">
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -899,11 +952,38 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                     onChange={(e) => setEditing({ ...editing, price: +e.target.value })} />
                   <select className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary transition"
                     value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as FoodItem["category"] })}>
-                    {["Briyani","Meals","Starters","Drinks","Desserts"].map((c) => <option key={c}>{c}</option>)}
+                    {["Breakfast","Briyani","Meals","Starters","Desserts"].map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </div>
-                <input className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary transition"
-                  placeholder="Image URL" value={editing.image} onChange={(e) => setEditing({ ...editing, image: e.target.value })} />
+
+                {/* Image upload */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Food Image</label>
+                  <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 px-4 py-5 hover:border-primary hover:bg-primary/5 transition">
+                    {editing.image ? (
+                      <img src={editing.image} alt="preview" className="h-24 w-24 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                        <Plus className="h-6 w-6" />
+                        <span className="text-xs">Click to upload image</span>
+                      </div>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">{editing.image ? "Click to change" : "JPG, PNG, WEBP"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setEditing({ ...editing, image: ev.target?.result as string });
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={editing.veg} onChange={(e) => setEditing({ ...editing, veg: e.target.checked })} className="accent-primary" />
                   <span className="text-muted-foreground">Vegetarian</span>

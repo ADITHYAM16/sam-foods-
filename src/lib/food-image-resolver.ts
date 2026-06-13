@@ -2,101 +2,40 @@
 // Used when admin adds/edits a menu item without providing an image URL.
 
 const IMAGE_MAP: { keywords: string[]; url: string }[] = [
-  // Idli / Vada
-  {
-    keywords: ["idli", "idly"],
-    url: "https://images.unsplash.com/photo-1630409351217-bc4fa6422075?auto=format&fit=crop&w=900&q=80",
-  },
-  // Dosa (generic)
-  {
-    keywords: ["dosa", "dosai", "kal dosa", "nyc dosa", "plain dosa", "keerai", "thakkali", "podi dosa", "roast"],
-    url: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=900&q=80",
-  },
-  // Masala Dosa / Mysore Masala
-  {
-    keywords: ["masala dosa", "mysore masala", "mysore"],
-    url: "https://images.unsplash.com/photo-1614777735417-4d92a84d5adf?auto=format&fit=crop&w=900&q=80",
-  },
-  // Uthappam / Onion
-  {
-    keywords: ["uthappam", "uttapam", "onion"],
-    url: "https://images.unsplash.com/photo-1630409351217-bc4fa6422075?auto=format&fit=crop&w=900&q=80",
-  },
-  // Pongal
-  {
-    keywords: ["pongal"],
-    url: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?auto=format&fit=crop&w=900&q=80",
-  },
-  // Upma / Kitchadi / Semolina
-  {
-    keywords: ["upma", "kitchadi", "kichadi", "semolina", "rava rotti", "rotti"],
-    url: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80",
-  },
-  // Vadai / Vada
-  {
-    keywords: ["vadai", "vada", "medu", "kara vadai"],
-    url: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=900&q=80",
-  },
-  // Biryani / Mushroom biryani
-  {
-    keywords: ["biryani", "biriyani", "mushroom biryani", "veg biryani"],
-    url: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80",
-  },
-  // Ghee Rice
-  {
-    keywords: ["ghee rice", "ghee"],
-    url: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=80",
-  },
-  // Rice varieties (tomato, curd, lemon, puli, tamarind)
-  {
-    keywords: ["tomato rice", "curd rice", "lemon rice", "puli rice", "tamarind rice", "rice"],
-    url: "https://images.unsplash.com/photo-1596560548464-f010549b84d7?auto=format&fit=crop&w=900&q=80",
-  },
-  // Full Meal / Half Meal / Thali
-  {
-    keywords: ["full meal", "half meal", "thali", "meals"],
-    url: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80",
-  },
-  // Parota / Kothu
-  {
-    keywords: ["parota", "parotta", "kothu", "kottu"],
-    url: "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=900&q=80",
-  },
-  // Paneer
-  {
-    keywords: ["paneer"],
-    url: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=900&q=80",
-  },
-  // Kesari / Halwa / Sweets
-  {
-    keywords: ["kesari", "halwa", "sweet", "dessert"],
-    url: "https://images.unsplash.com/photo-1605197788044-5b4ad6b0f4f3?auto=format&fit=crop&w=900&q=80",
-  },
-  // Rasmalai / Gulab Jamun / Milk sweets
-  {
-    keywords: ["rasmalai", "gulab", "jamun", "milk"],
-    url: "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=900&q=80",
-  },
-  // Drinks / Lassi / Juice
-  {
-    keywords: ["lassi", "juice", "soda", "drink", "beverage", "water"],
-    url: "https://images.unsplash.com/photo-1626202378011-f47220801c63?auto=format&fit=crop&w=900&q=80",
-  },
-  // Soup
-  {
-    keywords: ["soup", "rasam"],
-    url: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80",
-  },
-  // Manchurian / Chinese / Fried
-  {
-    keywords: ["manchurian", "fried", "65", "starters"],
-    url: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=900&q=80",
-  },
+  { keywords: ["idli", "idly"],                                           url: "/food/IDLY.jpeg" },
+  { keywords: ["mysore masala", "mysore"],                                url: "/food/mysore masala dosa.jpeg" },
+  { keywords: ["masala dosa"],                                            url: "/food/masala dosa.jpeg" },
+  { keywords: ["kal dosa"],                                               url: "/food/kal dosa.jpeg" },
+  { keywords: ["nyc dosa"],                                               url: "/food/NYC dosa.jpeg" },
+  { keywords: ["plain dosa"],                                             url: "/food/plain dosa.jpeg" },
+  { keywords: ["keerai"],                                                 url: "/food/keerai dosa.jpeg" },
+  { keywords: ["thakkali"],                                               url: "/food/Thakkali dosa.jpeg" },
+  { keywords: ["podi dosa"],                                              url: "/food/podi dosa.jpeg" },
+  { keywords: ["dosa", "dosai", "roast"],                                 url: "/food/plain dosa.jpeg" },
+  { keywords: ["uthappam", "uttapam", "onion"],                           url: "/food/onion uththappam.jpeg" },
+  { keywords: ["pongal"],                                                 url: "/food/pongal.jpeg" },
+  { keywords: ["upma"],                                                   url: "/food/upma.jpeg" },
+  { keywords: ["kitchadi", "kichadi"],                                    url: "/food/kitchadi.jpeg" },
+  { keywords: ["rava rotti", "ravi rotti", "rotti"],                      url: "/food/ravi rotti.jpeg" },
+  { keywords: ["medu vadai", "medu"],                                     url: "/food/medu vadai.jpeg" },
+  { keywords: ["kara vadai", "vadai", "vada"],                            url: "/food/kara vadai.jpeg" },
+  { keywords: ["mushroom biryani", "mushroom biriyani"],                  url: "/food/mushroom biriyani.jpeg" },
+  { keywords: ["veg biryani", "veg biriyani"],                            url: "/food/veg biryani.jpeg" },
+  { keywords: ["biryani", "biriyani"],                                    url: "/food/mushroom biriyani.jpeg" },
+  { keywords: ["ghee rice", "ghee"],                                      url: "/food/Ghee rice.jpeg" },
+  { keywords: ["tomato rice"],                                            url: "/food/tomato rice.jpeg" },
+  { keywords: ["curd rice"],                                              url: "/food/curd rice.jpeg" },
+  { keywords: ["lemon rice"],                                             url: "/food/lemon rice.jpeg" },
+  { keywords: ["puli rice", "tamarind rice"],                             url: "/food/puli rice.jpeg" },
+  { keywords: ["rice"],                                                   url: "/food/Ghee rice.jpeg" },
+  { keywords: ["full meal"],                                              url: "/food/full meal.jpeg" },
+  { keywords: ["half meal"],                                              url: "/food/half meals.jpeg" },
+  { keywords: ["thali", "meals"],                                         url: "/food/full meal.jpeg" },
+  { keywords: ["parota", "parotta", "kothu", "kottu"],                    url: "/food/kothu parotta.jpeg" },
+  { keywords: ["kesari", "halwa", "sweet", "dessert"],                    url: "/food/kesari.jpeg" },
 ];
 
-// Default fallback image — generic South Indian food spread
-const DEFAULT_IMAGE =
-  "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80";
+const DEFAULT_IMAGE = "/food/full meal.jpeg";
 
 // Default descriptions by category
 const DEFAULT_DESCRIPTIONS: Record<string, string> = {
@@ -113,7 +52,9 @@ const DEFAULT_DESCRIPTIONS: Record<string, string> = {
  * If no image provided, finds the best keyword match or uses a category default.
  */
 export function resolveImage(name: string, image: string, category?: string): string {
-  if (image && image.trim()) return image.trim();
+  const trimmed = image?.trim() ?? "";
+  // If it's a local path, use it directly
+  if (trimmed && !trimmed.includes("unsplash.com")) return trimmed;
 
   const lower = name.toLowerCase();
 
