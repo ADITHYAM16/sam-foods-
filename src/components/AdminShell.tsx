@@ -120,6 +120,29 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
               </div>
             )}
 
+            {showDeliveryViews && (
+              <div className="hidden items-center gap-1 rounded-full border border-border bg-background/60 p-1 sm:flex">
+                {([
+                  { id: "requests" as const, label: "Requests", icon: Bell },
+                  { id: "deliveries" as const, label: "Deliveries", icon: Bike },
+                  { id: "history" as const, label: "History", icon: History },
+                ] as const).map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => onDeliveryTabChange?.(id)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                      activeDeliveryTab === id
+                        ? "gradient-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex-1" />
 
             <span className="hidden items-center gap-1.5 rounded-full bg-emerald-600/10 px-3 py-1 text-xs font-semibold text-emerald-600 sm:inline-flex">

@@ -22,12 +22,32 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Service role client no longer needed here — imported from admin-client singleton
+const PROFILE_CACHE_KEY = "sam_profile_cache";
 
-const profileCache = new Map<string, User>();
+// Read/write a tiny profile cache in localStorage so refresh is instant
+function getCachedProfile(id: string): User | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as Record<string, User>;
+    return cache[id] ?? null;
+  } catch { return null; }
+}
+
+function setCachedProfile(user: User) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[user.id] = user;
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
+function clearProfileCache() {
+  localStorage.removeItem(PROFILE_CACHE_KEY);
+}
 
 async function fetchProfile(id: string, email?: string): Promise<User | null> {
-  if (profileCache.has(id)) return profileCache.get(id)!;
   try {
     const { data, error } = await adminClient.from("profiles").select("*").eq("id", id).single();
     if (error || !data) {
@@ -37,33 +57,68 @@ async function fetchProfile(id: string, email?: string): Promise<User | null> {
         const { data: created } = await adminClient.from("profiles").select("*").eq("id", id).single();
         if (!created) return null;
         const u: User = { id: created.id, name: created.name, email: created.email, phone: created.phone ?? undefined, role: created.role as Role };
-        profileCache.set(id, u);
+        setCachedProfile(u);
         return u;
       }
       return null;
     }
     const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
-    profileCache.set(id, u);
+    setCachedProfile(u);
     return u;
   } catch (e) { console.error("[Auth] Profile fetch exception:", e); return null; }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed state synchronously from localStorage cache so the UI shows instantly
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      // Read the stored session to find the current user id without a network call
+      const sessionRaw =
+        window.sessionStorage.getItem("sam_admin_auth") ||
+        window.localStorage.getItem("sam_admin_auth");
+      if (!sessionRaw) return null;
+      const session = JSON.parse(sessionRaw);
+      const id: string | undefined = session?.user?.id;
+      if (!id) return null;
+      return getCachedProfile(id);
+    } catch { return null; }
+  });
+  // loading=false immediately if we already have a cached user, otherwise wait
+  const [loading, setLoading] = useState(() => {
+    try {
+      const sessionRaw =
+        window.sessionStorage.getItem("sam_admin_auth") ||
+        window.localStorage.getItem("sam_admin_auth");
+      if (!sessionRaw) return false; // no session → go straight to login
+      const session = JSON.parse(sessionRaw);
+      const id: string | undefined = session?.user?.id;
+      if (!id) return false;
+      return getCachedProfile(id) === null; // still loading only if no cache
+    } catch { return false; }
+  });
 
   useEffect(() => {
-    // onAuthStateChange fires INITIAL_SESSION synchronously from localStorage
-    // on page load — this is the single source of truth, no getSession() needed.
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const su = session.user;
-        const profile = await fetchProfile(su.id, su.email ?? undefined);
-        setUser(profile);
+        // Use cache first for instant render, then revalidate in background
+        const cached = getCachedProfile(su.id);
+        if (cached) {
+          setUser(cached);
+          setLoading(false);
+          // Background revalidation — updates cache silently
+          fetchProfile(su.id, su.email ?? undefined).then(fresh => {
+            if (fresh) setUser(fresh);
+          });
+        } else {
+          const profile = await fetchProfile(su.id, su.email ?? undefined);
+          setUser(profile);
+          setLoading(false);
+        }
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => { sub.subscription.unsubscribe(); };
@@ -73,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw new Error(error.message);
     if (!data.user) throw new Error("Login failed - no user returned");
-    profileCache.delete(data.user.id); // bust cache so fresh profile is fetched
+    clearProfileCache();
     const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim());
     if (!profile) throw new Error("Could not load profile. Please try again.");
     setUser(profile);
@@ -93,15 +148,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, { onConflict: "id" });
     if (profileError) throw new Error(profileError.message);
     const newUser: User = { id: data.user.id, name, email: email.trim(), phone, role: role ?? "customer" };
+    setCachedProfile(newUser);
     setUser(newUser);
     return newUser;
   };
 
   const logout = async () => {
     setUser(null);
-    profileCache.clear();
+    clearProfileCache();
     await supabase.auth.signOut();
-    // Clear both storages so no tab inherits a stale session after logout
     window.sessionStorage.removeItem("sam_admin_auth");
     window.localStorage.removeItem("sam_admin_auth");
   };

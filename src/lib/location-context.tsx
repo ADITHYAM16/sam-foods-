@@ -36,7 +36,7 @@ interface LocationContextValue {
   saveAddress: (label: string, address: string, lat?: number, lng?: number) => Promise<void>;
   setDefault: (id: string) => Promise<void>;
   deleteAddress: (id: string) => Promise<void>;
-  fetchGPS: () => Promise<void>;
+  fetchGPS: () => Promise<{ address: string; lat: number; lng: number } | null>;
 }
 
 const LocationContext = createContext<LocationContextValue | null>(null);
@@ -83,42 +83,54 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     setSaved((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const fetchGPS = useCallback(async () => {
-    if (!navigator.geolocation) return;
+  const fetchGPS = useCallback((): Promise<{ address: string; lat: number; lng: number } | null> => {
+    if (!navigator.geolocation) return Promise.resolve(null);
     setGpsLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-          );
-          const json = await res.json();
-          const address: string =
-            json.display_name ??
-            `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-          localStorage.setItem(GPS_KEY, JSON.stringify({ address, lat, lng }));
-          if (user) {
-            // Update existing "Current Location" row if it exists, otherwise insert
-            const existing = saved.find((a) => a.label === "Current Location");
-            if (existing) {
-              await (supabase.from("saved_addresses") as any)
-                .update({ address, lat, lng })
-                .eq("id", existing.id);
-              setSaved((prev) => prev.map((a) => a.id === existing.id ? { ...a, address, lat, lng } : a));
-            } else {
-              await saveAddress("Current Location", address, lat, lng);
+    return new Promise((resolve) => {
+      // Use low accuracy first for fast response on mobile, then high accuracy
+      const tryGet = (highAccuracy: boolean) => {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { latitude: lat, longitude: lng } = pos.coords;
+            let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            try {
+              const ctrl = new AbortController();
+              setTimeout(() => ctrl.abort(), 5000);
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+                { signal: ctrl.signal }
+              );
+              const json = await res.json();
+              if (json.display_name) address = json.display_name;
+            } catch { /* use coordinate fallback */ }
+            localStorage.setItem(GPS_KEY, JSON.stringify({ address, lat, lng }));
+            if (user) {
+              const existing = saved.find((a) => a.label === "Current Location");
+              if (existing) {
+                (supabase.from("saved_addresses") as any)
+                  .update({ address, lat, lng }).eq("id", existing.id)
+                  .then(() => setSaved((prev) => prev.map((a) => a.id === existing.id ? { ...a, address, lat, lng } : a)));
+              } else {
+                saveAddress("Current Location", address, lat, lng);
+              }
             }
-          }
-        } catch {
-          /* ignore reverse-geocode failure */
-        } finally {
-          setGpsLoading(false);
-        }
-      },
-      () => setGpsLoading(false),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+            setGpsLoading(false);
+            resolve({ address, lat, lng });
+          },
+          (err) => {
+            // If high accuracy fails, retry with low accuracy
+            if (highAccuracy) {
+              tryGet(false);
+            } else {
+              setGpsLoading(false);
+              resolve(null);
+            }
+          },
+          { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 8000 : 5000, maximumAge: 30000 }
+        );
+      };
+      tryGet(true);
+    });
   }, [user, saved]);
 
   return (

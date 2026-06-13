@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { useAuth } from "@/lib/auth-context";
-import { useLocation } from "@/lib/location-context";
+import { useLocation, isWithinDeliveryRadius } from "@/lib/location-context";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/profile")({
@@ -41,6 +41,7 @@ function ProfilePage() {
   const [addrForm, setAddrForm] = useState(EMPTY_ADDR);
   const [addrSaving, setAddrSaving] = useState(false);
   const [showAddrForm, setShowAddrForm] = useState(false);
+  const [addrOutOfRange, setAddrOutOfRange] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", search: { redirect: "/profile" } as any });
@@ -89,7 +90,23 @@ function ProfilePage() {
     const parts = [flatNo, street, area, landmark].map(s => s.trim()).filter(Boolean);
     if (parts.length === 0) return;
     setAddrSaving(true);
-    await saveAddress(label || "Home", parts.join(", "));
+    const addressStr = parts.join(", ");
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressStr + ", Tamil Nadu, India")}`
+      );
+      const data = await res.json();
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        console.log("Latitude:", lat);
+        console.log("Longitude:", lng);
+        if (!isWithinDeliveryRadius(lat, lng)) { setAddrOutOfRange(true); setAddrSaving(false); return; }
+        await saveAddress(label || "Home", addressStr, lat, lng);
+      } else {
+        setAddrOutOfRange(true); setAddrSaving(false); return;
+      }
+    } catch { setAddrOutOfRange(true); setAddrSaving(false); return; }
     setAddrSaving(false);
     setAddrForm(EMPTY_ADDR);
     setShowAddrForm(false);
@@ -396,11 +413,35 @@ function ProfilePage() {
           <Link to="/orders" className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent transition">
             View Order History →
           </Link>
-          <Link to="/track" className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent transition">
+          <Link to="/track" search={{ orderId: undefined } as any} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent transition">
             Track Active Order →
           </Link>
         </div>
       </section>
+
+      {/* ── Out of delivery radius modal ── */}
+      <AnimatePresence>
+        {addrOutOfRange && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-sm rounded-3xl border border-destructive/30 bg-card p-8 text-center shadow-elegant">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-destructive/10">
+                <MapPin className="h-8 w-8 text-destructive" />
+              </div>
+              <h3 className="font-[Fraunces] text-2xl font-black">Outside Delivery Radius</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your current location is outside our <span className="font-bold text-foreground">10 km</span> delivery zone, or location access was denied. SAM Foods only delivers within 10 km of the restaurant. Please enable location access and try from within the delivery area.
+              </p>
+              <button
+                onClick={() => setAddrOutOfRange(false)}
+                className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
+                Change Address
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </SiteShell>
   );
 }

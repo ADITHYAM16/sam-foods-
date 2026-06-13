@@ -36,16 +36,20 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
 
   useEffect(() => {
+    // Only attach scroll parallax on desktop — causes jank on mobile
+    if (window.innerWidth < 768) return;
     const onScroll = () => scrollY.set(window.scrollY);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [scrollY]);
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 gradient-hero" aria-hidden />
       <motion.div
-        style={{ y: heroY, scale: heroScale }}
+        style={isMobile ? {} : { y: heroY, scale: heroScale }}
         className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-2 md:px-6 md:py-24"
       >
         <div>
@@ -78,7 +82,7 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
         </div>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }} className="relative">
           <motion.img
-            animate={{ y: [0, -10, 0] }}
+            animate={isMobile ? {} : { y: [0, -10, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             src="https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80"
             alt="SAM signature biryani"
@@ -265,7 +269,7 @@ function Index() {
                 {filtered.map((m, i) => (
                   <motion.div key={m.id} className="flex w-full"
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}>
+                    transition={{ delay: Math.min(i * 0.03, 0.3) }}>
                     <FoodCard item={m} index={i} />
                   </motion.div>
                 ))}
@@ -313,7 +317,7 @@ function Index() {
                       <motion.div key={m.id} className="flex w-full"
                         initial={{ opacity: 0, y: 24, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ delay: i * 0.04, duration: 0.4, ease: "easeOut" }}
+                        transition={{ delay: Math.min(i * 0.04, 0.3), duration: 0.4, ease: "easeOut" }}
                       >
                         <FoodCard item={m} index={i} />
                       </motion.div>

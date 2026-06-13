@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Minus, Plus, Tag, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, LogIn, MapPin, Navigation, Clock, X } from "lucide-react";
+import { Minus, Plus, Trash2, ShoppingBag, Leaf, Loader2, Banknote, Smartphone, LogIn, MapPin, Navigation, Clock, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -19,22 +19,6 @@ declare global {
   interface Window { Razorpay: new (opts: object) => { open(): void }; }
 }
 
-// Fetch coupons from DB at runtime; fallback to empty if table doesn't exist
-async function fetchCoupons(): Promise<Record<string, number>> {
-  try {
-    const { data } = await (supabase.from("coupons") as any)
-      .select("code,discount")
-      .eq("active", true);
-    if (!data || data.length === 0) return {};
-    return Object.fromEntries((data as { code: string; discount: number }[]).map(c => [c.code.toUpperCase(), c.discount]));
-  } catch {
-    return {};
-  }
-}
-
-// Static fallback coupons — used if DB table doesn't exist yet
-const STATIC_COUPONS: Record<string, number> = { SAM50: 50, SAM100: 100, WELCOME: 30 };
-
 function loadRazorpay(): Promise<boolean> {
   return new Promise(resolve => {
     if (window.Razorpay) return resolve(true);
@@ -49,22 +33,11 @@ function loadRazorpay(): Promise<boolean> {
 function CartPage() {
   const { items, setQty, remove, subtotal, delivery, gst, total, clear } = useCart();
   const { user } = useAuth();
-  const { saved, active, gpsLoading, fetchGPS } = useLocation();
+  const { saved, active, gpsLoading, fetchGPS, saveAddress } = useLocation();
   const navigate = useNavigate();
-
-  const [coupon, setCoupon] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
-  const [discount, setDiscount] = useState(0);
-  const [couponMsg, setCouponMsg] = useState<string | null>(null);
-  const [dbCoupons, setDbCoupons] = useState<Record<string, number> | null>(null);
 
   // Validate Razorpay key on mount
   const razorpayKeyMissing = !import.meta.env.VITE_RAZORPAY_KEY_ID;
-
-  // Load coupons from DB once on mount
-  useEffect(() => {
-    fetchCoupons().then(c => setDbCoupons(c));
-  }, []);
 
   const [selectedAddress, setSelectedAddress] = useState(active?.address ?? "");
   const [manualLocation, setManualLocation] = useState("");
@@ -72,6 +45,7 @@ function CartPage() {
   const [orderErr, setOrderErr] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [requestStatus, setRequestStatus] = useState<"waiting" | "denied" | null>(null);
+  const [locationError, setLocationError] = useState<"out_of_range" | "unverified" | null>(null);
 
   // Use a ref to hold the active poll/channel cleanup so it survives re-renders
   // without being listed as a useEffect dependency
@@ -155,8 +129,11 @@ function CartPage() {
   useEffect(() => () => { cancelWatch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [gpsAddress, setGpsAddress] = useState("");
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsErr, setGpsErr] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [showGpsPrompt, setShowGpsPrompt] = useState(false); // nudge when manual entered
 
   // Pick the active (default) address once on mount
   useEffect(() => {
@@ -169,57 +146,49 @@ function CartPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
 
-  const deliveryLocation = selectedAddress;
-
-  const applyCoupon = () => {
-    const code = coupon.trim().toUpperCase();
-    const allCoupons = { ...STATIC_COUPONS, ...(dbCoupons ?? {}) };
-    if (allCoupons[code]) {
-      setDiscount(allCoupons[code]);
-      setAppliedCoupon(code);
-      setCouponMsg(`✓ "${code}" applied — ₹${allCoupons[code]} off!`);
+  const triggerGPS = async () => {
+    setGpsErr(null);
+    // Ask browser for permission — if denied, show turn-on instruction
+    if (navigator.permissions) {
+      const perm = await navigator.permissions.query({ name: "geolocation" });
+      if (perm.state === "denied") {
+        setGpsErr("GPS is blocked. On your phone go to Settings → Site permissions → Location and allow this site.");
+        return;
+      }
+    }
+    const result = await fetchGPS();
+    if (result) {
+      setGpsCoords({ lat: result.lat, lng: result.lng });
+      // Keep manual text as human-readable address but attach GPS coords
+      if (!gpsAddress) {
+        setGpsAddress(result.address);
+        if (!selectedAddress) setSelectedAddress(result.address);
+      }
+      setShowGpsPrompt(false);
     } else {
-      setDiscount(0);
-      setAppliedCoupon(null);
-      setCouponMsg("Invalid coupon code.");
+      setGpsErr("Could not get location. Make sure GPS / Location is turned ON in your phone settings, then try again.");
     }
   };
 
-  const removeCoupon = () => {
-    setDiscount(0);
-    setAppliedCoupon(null);
-    setCoupon("");
-    setCouponMsg(null);
-  };
 
-  const finalTotal = Math.max(0, total - discount);
+  const deliveryLocation = selectedAddress;
+
+  const finalTotal = total;
 
   const checkout = async () => {
     if (!user) { setShowAuthPrompt(true); return; }
     if (!deliveryLocation) { setOrderErr("Please enter your delivery location."); return; }
 
     // Validate delivery radius
-    const addrEntry = saved.find((a) => a.address === deliveryLocation);
-    let withinRadius: boolean | null = null;
-    if (addrEntry?.lat != null && addrEntry?.lng != null) {
-      withinRadius = isWithinDeliveryRadius(addrEntry.lat, addrEntry.lng);
-    } else {
-      // Geocode the text address via Nominatim
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(deliveryLocation)}&format=json&limit=1`
-        );
-        const results = await res.json();
-        if (results?.[0]) {
-          withinRadius = isWithinDeliveryRadius(parseFloat(results[0].lat), parseFloat(results[0].lon));
-        }
-      } catch { /* allow order if geocode fails */ }
+    // Resolve coords: GPS session > saved address coords
+    let coords = gpsCoords;
+    if (!coords) {
+      const addrEntry = saved.find((a) => a.address.trim() === deliveryLocation.trim());
+      if (addrEntry?.lat != null && addrEntry?.lng != null) coords = { lat: addrEntry.lat, lng: addrEntry.lng };
     }
 
-    if (withinRadius === false) {
-      setOrderErr("📍 Out of delivery radius — SAM Foods only delivers within 10 km of the restaurant.");
-      return;
-    }
+    if (!coords) { setLocationError("unverified"); return; }
+    if (!isWithinDeliveryRadius(coords.lat, coords.lng)) { setLocationError("out_of_range"); return; }
 
     // Cancel any previous watch and start fresh
     resetOrderState();
@@ -230,9 +199,11 @@ function CartPage() {
       customer: user.name,
       email: user.email ?? null,
       room: deliveryLocation,
+      delivery_lat: gpsCoords?.lat ?? null,
+      delivery_lng: gpsCoords?.lng ?? null,
       deliveryTime: "ASAP",
       items, subtotal, delivery_fee: delivery, gst,
-      total: finalTotal, discount,
+      total: finalTotal, discount: 0,
       payment_method: payMethod as "cod" | "gpay",
     };
 
@@ -361,37 +332,13 @@ function CartPage() {
                 </div>
               )}
 
-              {/* Coupon */}
-              {!appliedCoupon ? (
-                <div>
-                  <div className="flex items-center gap-2 rounded-2xl border border-dashed border-border p-2">
-                    <Tag className="ml-2 h-4 w-4 shrink-0 text-primary" />
-                    <input
-                      value={coupon}
-                      onChange={e => setCoupon(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && applyCoupon()}
-                      placeholder="Enter coupon code"
-                      className="w-full bg-transparent px-1 text-sm outline-none uppercase"
-                    />
-                    <button onClick={applyCoupon} className="shrink-0 rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">Apply</button>
-                  </div>
-                  {couponMsg && <p className="mt-1.5 text-xs text-destructive">{couponMsg}</p>}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5">
-                  <div>
-                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{couponMsg}</span>
-                  </div>
-                  <button onClick={removeCoupon} className="text-xs text-muted-foreground underline hover:text-destructive">Remove</button>
-                </div>
-              )}
+
 
               {/* Price breakdown */}
               <div>
                 <Row k="Subtotal" v={`₹${subtotal}`} />
                 <Row k={`Delivery${subtotal > 499 ? " (free above ₹499)" : ""}`} v={delivery === 0 ? "FREE" : `₹${delivery}`} />
                 <Row k="GST (5%)" v={`₹${gst}`} />
-                {discount > 0 && <Row k={`Coupon (${appliedCoupon})`} v={`- ₹${discount}`} accent />}
                 <hr className="my-3 border-border" />
                 <div className="flex items-center justify-between text-lg font-bold">
                   <span>Total</span><span>₹{finalTotal}</span>
@@ -423,7 +370,7 @@ function CartPage() {
                     <div className="flex items-start gap-2 rounded-xl border border-primary bg-primary/5 px-3 py-2.5">
                       <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                       <p className="flex-1 text-xs font-semibold text-primary break-words">{gpsAddress}</p>
-                      <button type="button" onClick={() => { setGpsAddress(""); setSelectedAddress(""); }} className="shrink-0">
+                      <button type="button" onClick={() => { setGpsAddress(""); setGpsCoords(null); setSelectedAddress(""); }} className="shrink-0">
                         <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                       </button>
                     </div>
@@ -431,12 +378,16 @@ function CartPage() {
                     <button type="button"
                       disabled={gpsLoading}
                       onClick={async () => {
-                        await fetchGPS();
-                        const cur = saved.find(a => a.label === "Current Location");
-                        const addr = cur?.address ?? "";
-                        setGpsAddress(addr);
-                        setSelectedAddress(addr);
-                        setShowManual(false);
+                        setGpsErr(null);
+                        const result = await fetchGPS();
+                        if (result) {
+                          setGpsAddress(result.address);
+                          setGpsCoords({ lat: result.lat, lng: result.lng });
+                          setSelectedAddress(result.address);
+                          setShowManual(false);
+                        } else {
+                          setGpsErr("Could not get your location. Please allow location access and try again.");
+                        }
                       }}
                       className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
                       <Navigation className="h-3.5 w-3.5 shrink-0" />
@@ -445,6 +396,7 @@ function CartPage() {
                       </span>
                     </button>
                   )}
+                  {gpsErr && <p className="px-1 text-xs text-destructive">{gpsErr}</p>}
 
                   {/* Saved addresses toggle */}
                   <button type="button"
@@ -459,11 +411,11 @@ function CartPage() {
                         : "border-border bg-background text-muted-foreground hover:bg-accent"
                     }`}>
                     <MapPin className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 text-left">Saved addresses</span>
+                    <span className="flex-1 text-left">Saved addresses / Type address</span>
                     {showManual && <X className="h-3.5 w-3.5 shrink-0" />}
                   </button>
 
-                  {/* Saved addresses list — expands when toggled */}
+                  {/* Saved addresses list + manual input */}
                   <AnimatePresence>
                     {showManual && (
                       <motion.div
@@ -472,24 +424,73 @@ function CartPage() {
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden space-y-1.5 pl-1"
                       >
-                        {saved.filter(a => a.label !== "Current Location").length === 0 ? (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">No saved addresses found.</p>
-                        ) : (
-                          saved.filter(a => a.label !== "Current Location").map((a) => (
-                            <button key={a.id} type="button"
-                              onClick={() => { setSelectedAddress(a.address); setManualLocation(""); }}
-                              className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition ${
-                                selectedAddress === a.address
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border bg-background hover:bg-accent"
-                              }`}>
-                              <MapPin className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selectedAddress === a.address ? "text-primary" : "text-muted-foreground"}`} />
-                              <div className="min-w-0">
-                                <div className="text-xs font-semibold">{a.label}</div>
-                                <div className="truncate text-xs text-muted-foreground">{a.address}</div>
-                              </div>
+                        {/* Manual type + verify */}
+                        <div className="flex gap-2">
+                          <input
+                            value={manualLocation}
+                            onChange={e => { setManualLocation(e.target.value); setSelectedAddress(""); setShowGpsPrompt(!!e.target.value.trim()); }}
+                            placeholder="Type your address…"
+                            className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                          />
+                          <button
+                            type="button"
+                            disabled={!manualLocation.trim()}
+                            onClick={async () => {
+                              setSelectedAddress(manualLocation);
+                              // Save to DB for future use
+                              if (user && !saved.find(a => a.address.trim() === manualLocation.trim())) {
+                                await saveAddress("Home", manualLocation);
+                              }
+                              setShowGpsPrompt(true);
+                            }}
+                            className="shrink-0 rounded-xl gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
+                          >
+                            Use
+                          </button>
+                        </div>
+
+                        {/* GPS nudge — shown when manual address is entered without GPS */}
+                        {showGpsPrompt && !gpsCoords && (
+                          <div className="rounded-xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 space-y-2">
+                            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                              📍 Please tap <span className="font-bold">"Use my location"</span> once so we can confirm you're within our delivery zone.
+                            </p>
+                            <button
+                              type="button"
+                              disabled={gpsLoading}
+                              onClick={triggerGPS}
+                              className="flex w-full items-center justify-center gap-2 rounded-lg gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-60"
+                            >
+                              <Navigation className="h-3.5 w-3.5" />
+                              {gpsLoading ? "Fetching…" : "Use my location (GPS)"}
                             </button>
-                          ))
+                            {gpsErr && <p className="text-[10px] text-destructive">{gpsErr}</p>}
+                          </div>
+                        )}
+                        {gpsCoords && selectedAddress && (
+                          <p className="px-1 text-[10px] text-emerald-600 font-semibold">✓ GPS confirmed — your address is saved</p>
+                        )}
+
+                        {saved.filter(a => a.label !== "Current Location").length > 0 && (
+                          <>
+                            <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Saved</p>
+                            {saved.filter(a => a.label !== "Current Location").map((a) => (
+                              <button key={a.id} type="button"
+                                onClick={() => { setSelectedAddress(a.address); setManualLocation(""); }}
+                                className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition ${
+                                  selectedAddress === a.address
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border bg-background hover:bg-accent"
+                                }`}>
+                                <MapPin className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selectedAddress === a.address ? "text-primary" : "text-muted-foreground"}`} />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold">{a.label}</div>
+                                  <div className="truncate text-xs text-muted-foreground">{a.address}</div>
+                                  {a.lat == null && <div className="text-[10px] text-amber-500">⚠ No coords — use GPS for accurate delivery</div>}
+                                </div>
+                              </button>
+                            ))}
+                          </>
                         )}
                       </motion.div>
                     )}
@@ -576,6 +577,52 @@ function CartPage() {
                     transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.2 }} />
                 ))}
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Out of delivery radius modal ── */}
+      <AnimatePresence>
+        {locationError === "out_of_range" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-sm rounded-3xl border border-destructive/30 bg-card p-8 text-center shadow-elegant">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-destructive/10">
+                <MapPin className="h-8 w-8 text-destructive" />
+              </div>
+              <h3 className="font-[Fraunces] text-2xl font-black">Out of Delivery Radius</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Sorry! SAM Foods only delivers within <span className="font-bold text-foreground">10 km</span> of the restaurant. Your location is outside our delivery zone.
+              </p>
+              <button onClick={() => setLocationError(null)}
+                className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
+                Change Address
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Location unverified modal ── */}
+      <AnimatePresence>
+        {locationError === "unverified" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-sm rounded-3xl border border-amber-400/30 bg-card p-8 text-center shadow-elegant">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-amber-500/10">
+                <Navigation className="h-8 w-8 text-amber-500" />
+              </div>
+              <h3 className="font-[Fraunces] text-2xl font-black">Location Not Recognised</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                We couldn't verify your delivery address. Please use <span className="font-bold text-foreground">"Use my current location"</span> (GPS) so we can confirm you're within our delivery zone.
+              </p>
+              <button onClick={() => setLocationError(null)}
+                className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
+                OK, Got it
+              </button>
             </motion.div>
           </motion.div>
         )}

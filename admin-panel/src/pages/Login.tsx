@@ -40,23 +40,52 @@ export function Login() {
 
         {/* Left panel — image, desktop only */}
         <div className="relative hidden overflow-hidden md:block">
-          <img src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=1400&q=80"
-            alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-amber-900/40" />
-          <motion.div animate={{ y: [0, -14, 0] }} transition={{ duration: 6, repeat: Infinity }}
-            className="absolute bottom-12 left-12 right-12 text-white">
-            <div className="inline-flex items-center gap-2">
+          <motion.img
+            src="/food/kesari.jpeg"
+            alt=""
+            initial={{ scale: 1.18, x: -60, opacity: 0 }}
+            animate={{ scale: 1, x: 0, opacity: 1 }}
+            transition={{ duration: 1.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-amber-900/40"
+          />
+          <motion.div
+            animate={{ y: [0, -14, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute bottom-12 left-12 right-12 text-white"
+          >
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.7, delay: 0.7 }}
+              className="inline-flex items-center gap-2"
+            >
               <span className="grid h-10 w-10 place-items-center rounded-full overflow-hidden shadow-lg bg-white">
                 <img src="/logo.png.jpeg" alt="SAM Foods" className="h-10 w-10 rounded-full object-cover" />
               </span>
               <span className="font-[Fraunces] text-2xl font-bold">SAM Foods</span>
-            </div>
-            <h2 className="mt-6 max-w-md font-[Fraunces] text-4xl font-black leading-tight">
+            </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.9 }}
+              className="mt-6 max-w-md font-[Fraunces] text-4xl font-black leading-tight"
+            >
               Owner Portal — Command the kitchen.
-            </h2>
-            <p className="mt-3 max-w-md text-white/80">
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 1.1 }}
+              className="mt-3 max-w-md text-white/80"
+            >
               Manage orders, menu, bulk bookings, delivery agents and revenue — all from one dashboard.
-            </p>
+            </motion.p>
           </motion.div>
         </div>
 

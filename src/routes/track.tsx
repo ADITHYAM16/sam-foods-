@@ -175,7 +175,7 @@ function TrackPage() {
               {recentOrders.map(o => (
                 <button
                   key={o.id}
-                  onClick={() => navigate({ to: "/track", search: { orderId: o.id } })}
+                  onClick={() => navigate({ to: "/track", search: { orderId: o.id } as any })}
                   className="flex w-full items-start gap-4 rounded-2xl border border-border bg-card p-4 text-left transition hover:border-primary/40 hover:shadow-sm"
                 >
                   <div className="flex-1 min-w-0">
@@ -213,7 +213,7 @@ function TrackPage() {
           <div className="rounded-3xl border border-dashed border-border bg-card p-16 text-center">
             <Package className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-lg font-semibold">Order not found.</p>
-            <Link to="/track" className="mt-6 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">View all orders</Link>
+            <Link to="/track" search={{ orderId: undefined } as any} className="mt-6 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">View all orders</Link>
           </div>
         </section>
       </SiteShell>
@@ -224,7 +224,7 @@ function TrackPage() {
     <SiteShell>
       <section className="mx-auto max-w-5xl px-4 py-12 md:px-6">
         <button
-          onClick={() => navigate({ to: "/track" })}
+          onClick={() => navigate({ to: "/track", search: { orderId: undefined } as any })}
           className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition"
         >
           <ArrowLeft className="h-4 w-4" /> All orders

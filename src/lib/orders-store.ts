@@ -11,6 +11,8 @@ export interface Order {
   customer: string;
   email?: string | null;
   room: string;
+  delivery_lat?: number | null;
+  delivery_lng?: number | null;
   delivery_time: string;
   items: CartItem[];
   subtotal: number;
@@ -42,6 +44,8 @@ export interface OrderRequest {
   customer: string;
   email?: string | null;
   room: string;
+  delivery_lat?: number | null;
+  delivery_lng?: number | null;
   delivery_time: string;
   items: CartItem[];
   subtotal: number;
@@ -64,6 +68,8 @@ export async function submitOrderRequest(o: Parameters<typeof placeOrder>[0]): P
     customer: o.customer,
     email: o.email ?? null,
     room: o.room,
+    delivery_lat: o.delivery_lat ?? null,
+    delivery_lng: o.delivery_lng ?? null,
     delivery_time: o.deliveryTime,
     items: o.items as unknown as any,
     subtotal: o.subtotal,
@@ -299,6 +305,8 @@ export async function placeOrder(o: {
   customer: string;
   email?: string | null;
   room: string;
+  delivery_lat?: number | null;
+  delivery_lng?: number | null;
   deliveryTime: string;
   items: CartItem[];
   subtotal: number;
@@ -316,6 +324,8 @@ export async function placeOrder(o: {
       customer: o.customer,
       email: o.email ?? null,
       room: o.room,
+      delivery_lat: o.delivery_lat ?? null,
+      delivery_lng: o.delivery_lng ?? null,
       delivery_time: o.deliveryTime,
       items: o.items as unknown as import("@/integrations/supabase/types").Json,
       subtotal: o.subtotal,

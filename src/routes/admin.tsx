@@ -30,27 +30,30 @@ type BulkOrder = {
 
 type Agent = { id: string; name: string; email: string; phone: string | null };
 
-// ─── CSV Export ───────────────────────────────────────────────────────────────
-function exportOrdersCSV(orders: ReturnType<typeof useOrders>) {
-  const rows = [
-    ["ID", "Customer", "Room", "Items", "Total", "Status", "Payment", "Date"],
-    ...orders.map(o => [
-      o.id,
-      o.customer,
-      o.room,
-      o.items.map(i => `${i.name}x${i.qty}`).join("; "),
-      o.total,
-      o.status,
-      o.payment_method,
-      new Date(o.created_at).toLocaleString("en-IN"),
-    ]),
-  ];
+// ─── Excel (CSV) Export ───────────────────────────────────────────────────────
+function downloadExcel(rows: (string | number)[][], filename: string) {
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url;
-  a.download = `sam-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
+}
+
+function exportOrdersCSV(orders: ReturnType<typeof useOrders>) {
+  downloadExcel(
+    [["ID", "Customer", "Room", "Items", "Total", "Status", "Payment", "Date"],
+     ...orders.map(o => [o.id, o.customer, o.room, o.items.map(i => `${i.name}x${i.qty}`).join("; "), o.total, o.status, o.payment_method, new Date(o.created_at).toLocaleString("en-IN")])],
+    "sam-orders"
+  );
+}
+
+function exportBulkCSV(orders: BulkOrder[]) {
+  downloadExcel(
+    [["ID", "Name", "Phone", "Event", "People", "Date", "Location", "Menu Request", "Quoted Amount", "Status", "Payment", "Submitted"],
+     ...orders.map(b => [b.id, b.name, b.phone, b.event, b.people, b.date, b.location, b.menu_request ?? "", b.quoted_amount ?? "", b.status, b.payment_status, new Date(b.created_at).toLocaleString("en-IN")])],
+    "sam-bulk-orders"
+  );
 }
 
 // ─── Status Pill ──────────────────────────────────────────────────────────────
@@ -161,37 +164,68 @@ function AssignAgentModal({ orderId, onClose }: { orderId: string; onClose: () =
   );
 }
 
-// ─── Real Weekly Revenue Hook ─────────────────────────────────────────────────
+// ─── Revenue Hooks ────────────────────────────────────────────────────────────
 function useWeeklyRevenue() {
-  const [bars, setBars] = useState<{ day: string; total: number; pct: number }[]>([]);
+  const [bars, setBars] = useState<{ day: string; date: string; total: number; pct: number }[]>([]);
 
   useEffect(() => {
     const load = async () => {
-      const since = new Date();
-      since.setDate(since.getDate() - 6);
-      since.setHours(0, 0, 0, 0);
+      const since = new Date(); since.setDate(since.getDate() - 6); since.setHours(0, 0, 0, 0);
       const { data } = await (supabase.from("orders") as any)
-        .select("total, created_at").gte("created_at", since.toISOString()).neq("status", "Cancelled");
-      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        .select("total,created_at").gte("created_at", since.toISOString()).neq("status", "Cancelled");
+      const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
       const buckets: Record<string, number> = {};
       const labels: string[] = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
-        buckets[d.toISOString().slice(0, 10)] = 0;
-        labels.push(days[d.getDay()]);
+        const k = d.toISOString().slice(0, 10);
+        buckets[k] = 0; labels.push(days[d.getDay()]);
       }
       (data ?? []).forEach((o: any) => {
-        const key = new Date(o.created_at).toISOString().slice(0, 10);
-        if (key in buckets) buckets[key] += Number(o.total);
+        const k = new Date(o.created_at).toISOString().slice(0, 10);
+        if (k in buckets) buckets[k] += Number(o.total);
       });
       const values = Object.values(buckets);
       const max = Math.max(...values, 1);
-      setBars(Object.keys(buckets).map((k, i) => ({ day: labels[i], total: buckets[k], pct: Math.round((buckets[k] / max) * 100) })));
+      setBars(Object.keys(buckets).map((k, i) => ({ day: labels[i], date: k, total: buckets[k], pct: Math.round((buckets[k] / max) * 100) })));
     };
     load();
+    // Refresh chart at midnight
+    const now = new Date();
+    const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    const t = setTimeout(load, msToMidnight);
+    return () => clearTimeout(t);
   }, []);
 
   return bars;
+}
+
+function useMonthlyRevenue() {
+  const [months, setMonths] = useState<{ label: string; total: number; pct: number }[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      const since = new Date(); since.setMonth(since.getMonth() - 5); since.setDate(1); since.setHours(0,0,0,0);
+      const { data } = await (supabase.from("orders") as any)
+        .select("total,created_at").gte("created_at", since.toISOString()).neq("status", "Cancelled");
+      const buckets: Record<string, number> = {};
+      const labels: Record<string, string> = {};
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(); d.setMonth(d.getMonth() - i);
+        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        buckets[k] = 0;
+        labels[k] = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+      }
+      (data ?? []).forEach((o: any) => {
+        const d = new Date(o.created_at);
+        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        if (k in buckets) buckets[k] += Number(o.total);
+      });
+      const max = Math.max(...Object.values(buckets), 1);
+      setMonths(Object.keys(buckets).map(k => ({ label: labels[k], total: buckets[k], pct: Math.round((buckets[k]/max)*100) })));
+    };
+    load();
+  }, []);
+  return months;
 }
 
 // ─── Customer Count Hook ──────────────────────────────────────────────────────
@@ -307,6 +341,9 @@ function AdminPage() {
   const { items, menuLoading, saveItem, deleteItem, toggleAvailable } = useAdminMenu();
   const { bulkOrders, updateBulkStatus } = useBulkOrders();
   const weeklyBars = useWeeklyRevenue();
+  const [weekDrillDate, setWeekDrillDate] = useState<string | null>(null);
+  const drillOrders = weekDrillDate ? liveOrders.filter(o => o.created_at?.slice(0, 10) === weekDrillDate && o.status !== "Cancelled") : [];
+  const drillRevenue = drillOrders.reduce((s, o) => s + o.total, 0);
   const customerCount = useCustomerCount();
 
   // Play beep when new orders arrive
@@ -321,6 +358,9 @@ function AdminPage() {
   const todayRevenue = liveOrders
     .filter(o => o.created_at?.slice(0, 10) === todayStr && o.status !== "Cancelled")
     .reduce((s, o) => s + o.total, 0);
+
+  const [revenueView, setRevenueView] = useState<"today" | "week" | "month">("today");
+  const monthlyBars = useMonthlyRevenue();
 
   // Combined filters: status + search (name/room) + date
   const filteredOrders = liveOrders.filter(o => {

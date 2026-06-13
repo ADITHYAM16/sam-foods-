@@ -111,7 +111,8 @@ function DeliveryPage() {
   const todayEarnings = deliveredToday.reduce((s, o) => s + Math.round(o.total * commissionPct / 100), 0);
   const totalEarnings = allDelivered.reduce((s, o) => s + Math.round(o.total * commissionPct / 100), 0);
 
-  if (loading || !user || user.role !== "delivery") return (
+  if (loading) return null;
+  if (!user || user.role !== "delivery") return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-border border-t-primary" />
     </div>
@@ -119,7 +120,27 @@ function DeliveryPage() {
 
   return (
     <AdminShell activeTab="delivery" activeDeliveryTab={activeTab} onDeliveryTabChange={handleDeliveryTabChange}>
-      <section className="mx-auto max-w-5xl px-4 py-10 md:px-6">
+      {/* Mobile bottom tab bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-border bg-card/95 backdrop-blur-sm md:hidden">
+        {(["requests", "deliveries", "history"] as DeliveryTab[]).map((tab) => {
+          const labels = { requests: "Requests", deliveries: "Deliveries", history: "History" };
+          const icons = { requests: Bell, deliveries: Bike, history: History };
+          const Icon = icons[tab];
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex flex-1 flex-col items-center gap-1 py-3 text-[10px] font-semibold transition ${
+                activeTab === tab ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Icon className="h-5 w-5" />
+              {labels[tab]}
+            </button>
+          );
+        })}
+      </div>
+      <section className="mx-auto max-w-5xl px-4 pb-20 pt-10 md:px-6 md:pb-10">
 
         {/* Incoming request alert - visible on all tabs */}
         <AnimatePresence>
@@ -339,11 +360,24 @@ function DeliveryPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => {
-                          const dest = encodeURIComponent(o.room);
-                          if (!navigator.geolocation) { window.open(`https://www.google.com/maps/dir//${dest}`, "_blank"); return; }
+                          // Get delivery address coords from saved_addresses if available
+                          const openNav = (agentLat?: number, agentLng?: number) => {
+                            // Use lat/lng from order if stored, else fall back to address text
+                            const destCoords = (o as any).delivery_lat && (o as any).delivery_lng
+                              ? `${(o as any).delivery_lat},${(o as any).delivery_lng}`
+                              : null;
+                            const destText = encodeURIComponent(o.room);
+                            const origin = agentLat && agentLng ? `${agentLat},${agentLng}` : "";
+                            // Google Maps navigation URL — works on all devices
+                            const url = destCoords
+                              ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destCoords}&travelmode=driving`
+                              : `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destText}&travelmode=driving`;
+                            window.open(url, "_blank");
+                          };
+                          if (!navigator.geolocation) { openNav(); return; }
                           navigator.geolocation.getCurrentPosition(
-                            ({ coords }) => window.open(`https://www.google.com/maps/dir/${coords.latitude},${coords.longitude}/${dest}`, "_blank"),
-                            () => window.open(`https://www.google.com/maps/dir//${dest}`, "_blank"),
+                            ({ coords }) => openNav(coords.latitude, coords.longitude),
+                            () => openNav(),
                             { enableHighAccuracy: true, timeout: 8000 }
                           );
                         }}

@@ -29,7 +29,7 @@ const EMPTY_FORM = { flatNo: "", streetNo: "", streetName: "", area: "", landmar
 function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDefault, deleteAddress, user }: {
   onClose: () => void;
   saveAddress: (label: string, address: string) => Promise<void>;
-  fetchGPS: () => Promise<void>;
+  fetchGPS: () => Promise<{ address: string; lat: number; lng: number } | null>;
   gpsLoading: boolean;
   saved: SavedAddress[];
   setDefault: (id: string) => Promise<void>;
@@ -39,6 +39,10 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [gpsDone, setGpsDone] = useState(false);
+
+  useEffect(() => {
+    if (gpsDone && !gpsLoading) onClose();
+  }, [gpsDone, gpsLoading]);
 
   const set = (k: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -85,7 +89,6 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
             <Navigation className="h-4 w-4 shrink-0" />
             {gpsLoading ? "Fetching your location…" : "Use my location"}
           </button>
-          {gpsDone && !gpsLoading && <span className="hidden" ref={() => { onClose(); }} />}
 
           {/* Saved addresses */}
           {saved.length > 0 && (

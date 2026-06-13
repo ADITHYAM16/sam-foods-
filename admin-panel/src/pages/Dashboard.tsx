@@ -4,12 +4,79 @@ import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
   IndianRupee, Pencil, Plus, ShoppingBag, Trash2,
   Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User, RefreshCw, Activity,
+  Download, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, type OrderStatus, assignNearestAgent } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
 import { adminClient } from "@/lib/admin-client";
+
+/* ─── Excel export helper ─────────────────────────────────── */
+function exportToExcel(rows: Record<string, any>[], filename: string) {
+  const headers = Object.keys(rows[0] ?? {});
+  const csv = [
+    headers.join(","),
+    ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? "")).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `${filename}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ─── Revenue hook (today / week / monthly) ───────────────── */
+function useRevenueStats() {
+  const [todayRev, setTodayRev] = useState(0);
+  const [weekRev, setWeekRev] = useState(0);
+  const [monthRev, setMonthRev] = useState(0);
+  const [todayOrders, setTodayOrders] = useState<any[]>([]);
+  const [weekOrders, setWeekOrders] = useState<any[]>([]);
+  const [monthOrders, setMonthOrders] = useState<any[]>([]);
+
+  const load = useCallback(async () => {
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+    const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 6); weekStart.setHours(0,0,0,0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const { data } = await (adminClient.from("orders") as any)
+      .select("id,customer,room,total,items,created_at,payment_method,status")
+      .neq("status", "Cancelled")
+      .gte("created_at", monthStart.toISOString())
+      .order("created_at", { ascending: false });
+
+    const all = (data as any[]) ?? [];
+    const todays = all.filter(o => new Date(o.created_at) >= todayStart);
+    const weeks = all.filter(o => new Date(o.created_at) >= weekStart);
+
+    setTodayOrders(todays); setWeekOrders(weeks); setMonthOrders(all);
+    setTodayRev(todays.reduce((s: number, o: any) => s + Number(o.total), 0));
+    setWeekRev(weeks.reduce((s: number, o: any) => s + Number(o.total), 0));
+    setMonthRev(all.reduce((s: number, o: any) => s + Number(o.total), 0));
+  }, []);
+
+  // Initial load + midnight refresh
+  useEffect(() => {
+    load();
+    const now = new Date();
+    const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    const mid = setTimeout(() => { load(); }, msToMidnight);
+    return () => clearTimeout(mid);
+  }, [load]);
+
+  // Realtime order updates
+  useEffect(() => {
+    const ch = adminClient.channel("revenue-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, load)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, load)
+      .subscribe();
+    return () => { adminClient.removeChannel(ch); };
+  }, [load]);
+
+  return { todayRev, weekRev, monthRev, todayOrders, weekOrders, monthOrders, reload: load };
+}
 
 /* ─── Types ───────────────────────────────────────────────── */
 interface OrderRequest {
@@ -176,6 +243,9 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   const [viewOrder, setViewOrder] = useState<ReturnType<typeof useOrders>[number] | null>(null);
   const [saving, setSaving] = useState(false);
   const liveOrders = useOrders();
+  const { todayRev, weekRev, monthRev, todayOrders, weekOrders, monthOrders, reload: reloadRevenue } = useRevenueStats();
+  const [revExpanded, setRevExpanded] = useState(false);
+  const [revView, setRevView] = useState<"week" | "month">("week");
 
   const ADMIN_STATUS_FLOW: OrderStatus[] = ["Placed", "Preparing", "Ready"];
 
@@ -417,7 +487,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   }
 
   const stats = [
-    { label: "Today's Revenue", value: `₹${liveOrders.reduce((s, o) => s + o.total, 0).toLocaleString()}`, icon: IndianRupee, trend: "Live" },
+    { label: "Today's Revenue", value: `₹${todayRev.toLocaleString()}`, icon: IndianRupee, trend: "Live" },
     { label: "Orders", value: String(liveOrders.length), icon: ShoppingBag, trend: "Live" },
     { label: "Pending Requests", value: String(requests.length), icon: Bell, trend: requests.length > 0 ? "!" : "" },
     { label: "Menu Items", value: String(items.length), icon: Utensils, trend: "" },
@@ -467,24 +537,144 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
 
         {/* ── Stats ── */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((s, i) => (
-            <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
-                  <s.icon className="h-5 w-5" />
-                </span>
-                {s.trend && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.trend === "!" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-600/10 text-emerald-600"}`}>
-                    {s.trend === "!" ? "Pending" : s.trend}
+          {stats.map((s, i) => {
+            const isRevCard = s.label === "Today's Revenue";
+            return isRevCard ? (
+              <motion.button
+                key={s.label}
+                type="button"
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                onClick={() => setRevExpanded(v => !v)}
+                className="rounded-2xl border border-border bg-card p-5 shadow-sm text-left cursor-pointer hover:border-primary/50 hover:shadow-md transition w-full"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
+                    <s.icon className="h-5 w-5" />
                   </span>
-                )}
-              </div>
-              <div className="mt-3 text-2xl font-bold">{s.value}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
-            </motion.div>
-          ))}
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-600/10 text-emerald-600">Live</span>
+                    {revExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </div>
+                <div className="mt-3 text-2xl font-bold">{s.value}</div>
+                <div className="text-xs text-muted-foreground">Today's Revenue — click for breakdown</div>
+              </motion.button>
+            ) : (
+              <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
+                    <s.icon className="h-5 w-5" />
+                  </span>
+                  {s.trend && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.trend === "!" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-600/10 text-emerald-600"}`}>
+                      {s.trend === "!" ? "Pending" : s.trend}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 text-2xl font-bold">{s.value}</div>
+                <div className="text-xs text-muted-foreground">{s.label}</div>
+              </motion.div>
+            );
+          })}
         </div>
+
+        {/* ── Revenue Breakdown (click on Today's Revenue) ── */}
+        <AnimatePresence>
+          {revExpanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-4 rounded-3xl border border-border bg-card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-full border border-border bg-background p-1">
+                      {(["week", "month"] as const).map((v) => (
+                        <button key={v} onClick={() => setRevView(v)}
+                          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition capitalize ${
+                            revView === v ? "gradient-primary text-primary-foreground" : "text-muted-foreground"
+                          }`}>
+                          {v === "week" ? "This Week" : "This Month"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold">₹{(revView === "week" ? weekRev : monthRev).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{revView === "week" ? "Last 7 days" : "This month"}</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const orders = revView === "week" ? weekOrders : monthOrders;
+                        const label = revView === "week" ? "weekly" : "monthly";
+                        exportToExcel(
+                          orders.map(o => ({
+                            Date: new Date(o.created_at).toLocaleDateString("en-IN"),
+                            Time: new Date(o.created_at).toLocaleTimeString("en-IN"),
+                            Customer: o.customer,
+                            Location: o.room,
+                            Items: o.items?.map((i: any) => `${i.name} x${i.qty}`).join(" | "),
+                            Total: o.total,
+                            Payment: o.payment_method,
+                            Status: o.status,
+                          })),
+                          `sam-revenue-${label}-${new Date().toISOString().slice(0,10)}`
+                        );
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent transition"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Export
+                    </button>
+                  </div>
+                </div>
+
+                {/* Today's revenue download */}
+                <div className="mb-3 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Today's Revenue</div>
+                    <div className="text-lg font-bold">₹{todayRev.toLocaleString()}</div>
+                  </div>
+                  <button
+                    onClick={() => exportToExcel(
+                      todayOrders.map(o => ({
+                        Date: new Date(o.created_at).toLocaleDateString("en-IN"),
+                        Time: new Date(o.created_at).toLocaleTimeString("en-IN"),
+                        Customer: o.customer,
+                        Location: o.room,
+                        Items: o.items?.map((i: any) => `${i.name} x${i.qty}`).join(" | "),
+                        Total: o.total,
+                        Payment: o.payment_method,
+                        Status: o.status,
+                      })),
+                      `sam-revenue-today-${new Date().toISOString().slice(0,10)}`
+                    )}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent transition"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Today
+                  </button>
+                </div>
+
+                {/* Order rows */}
+                <div className="max-h-[320px] overflow-y-auto space-y-1.5 pr-1">
+                  {(revView === "week" ? weekOrders : monthOrders).map((o: any) => (
+                    <div key={o.id} className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-xs">
+                      <div className="min-w-0">
+                        <span className="font-semibold">{o.customer}</span>
+                        <span className="ml-2 text-muted-foreground">{o.room}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-bold">₹{o.total}</span>
+                        <span className="text-muted-foreground">{new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Live orders + Weekly revenue + Bulk Bookings ── */}
         <div className="mt-8 grid gap-6 lg:grid-cols-3">

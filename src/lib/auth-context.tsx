@@ -21,12 +21,36 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const PROFILE_CACHE_KEY = "sam_profile_cache";
+
+function getCachedProfile(id: string): User | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as Record<string, User>;
+    return cache[id] ?? null;
+  } catch { return null; }
+}
+
+function setCachedProfile(user: User) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[user.id] = user;
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
 async function fetchProfile(id: string, email?: string, displayName?: string): Promise<User | null> {
   try {
     const { data } = await (supabase.from("profiles") as any)
       .select("id,name,email,phone,role").eq("id", id).single();
 
-    if (data) return { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
+    if (data) {
+      const u: User = { id: data.id, name: data.name, email: data.email, phone: data.phone ?? undefined, role: data.role as Role };
+      setCachedProfile(u);
+      return u;
+    }
 
     const { data: agent } = await (supabase.from("delivery_agents") as any)
       .select("id,name,email,phone").eq("id", id).single();
@@ -36,7 +60,9 @@ async function fetchProfile(id: string, email?: string, displayName?: string): P
         { id: agent.id, name: agent.name, email: agent.email, phone: agent.phone ?? null, role: "delivery" },
         { onConflict: "id" }
       );
-      return { id: agent.id, name: agent.name, email: agent.email, phone: agent.phone ?? undefined, role: "delivery" };
+      const u: User = { id: agent.id, name: agent.name, email: agent.email, phone: agent.phone ?? undefined, role: "delivery" };
+      setCachedProfile(u);
+      return u;
     }
 
     if (email) {
@@ -45,7 +71,9 @@ async function fetchProfile(id: string, email?: string, displayName?: string): P
         { id, name, email, phone: null, role: "customer" },
         { onConflict: "id" }
       );
-      return { id, name, email, role: "customer" };
+      const u: User = { id, name, email, role: "customer" };
+      setCachedProfile(u);
+      return u;
     }
 
     return null;
@@ -55,26 +83,51 @@ async function fetchProfile(id: string, email?: string, displayName?: string): P
   }
 }
 
+function getStoredSessionId(): string | null {
+  try {
+    const raw = localStorage.getItem("sam_auth") ||
+      sessionStorage.getItem("sam_auth");
+    if (!raw) return null;
+    return JSON.parse(raw)?.user?.id ?? null;
+  } catch { return null; }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  // Prevent onAuthStateChange from overwriting user set by login()
   const skipNextAuthEvent = useRef(false);
-  // Track if getSession has resolved so we never show logged-out flash
   const sessionResolved = useRef(false);
 
+  // Hydrate synchronously from localStorage cache — zero network latency
+  const [user, setUser] = useState<User | null>(() => {
+    const id = getStoredSessionId();
+    return id ? getCachedProfile(id) : null;
+  });
+  const [loading, setLoading] = useState(() => {
+    const id = getStoredSessionId();
+    if (!id) return false; // no session → go straight to login
+    return getCachedProfile(id) === null; // need network only if no cache
+  });
+
   useEffect(() => {
-    // On mount: read persisted session synchronously via onAuthStateChange
-    // INITIAL_SESSION fires before any render-visible state change
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
       if (!sessionResolved.current) {
-        // First event is always INITIAL_SESSION — use it to hydrate user
         sessionResolved.current = true;
         if (session?.user) {
-          const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name);
-          setUser(profile);
+          const cached = getCachedProfile(session.user.id);
+          if (cached) {
+            setUser(cached);
+            setLoading(false);
+            // Background revalidation
+            fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name)
+              .then(fresh => { if (fresh) setUser(fresh); });
+          } else {
+            const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name);
+            setUser(profile);
+            setLoading(false);
+          }
+        } else {
+          setUser(null);
+          setLoading(false);
         }
-        setLoading(false);
         return;
       }
 
@@ -85,8 +138,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_OUT") {
         setUser(null);
       } else if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
-        const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name);
-        setUser(profile);
+        const cached = getCachedProfile(session.user.id);
+        if (cached) {
+          setUser(cached);
+          fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name)
+            .then(fresh => { if (fresh) setUser(fresh); });
+        } else {
+          const profile = await fetchProfile(session.user.id, session.user.email, session.user.user_metadata?.full_name);
+          setUser(profile);
+        }
       }
     });
 
@@ -99,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!data.user) throw new Error("Login failed.");
     const profile = await fetchProfile(data.user.id, data.user.email ?? email.trim(), data.user.user_metadata?.full_name);
     if (!profile) throw new Error("Could not load profile. Please try again.");
-    // Skip the SIGNED_IN event fired by signInWithPassword — we already have the profile
     skipNextAuthEvent.current = true;
     setUser(profile);
     return profile;
@@ -120,12 +179,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (profileError) throw new Error(profileError.message);
     const newUser: User = { id: data.user.id, name, email: email.trim(), phone, role: role ?? "customer" };
     skipNextAuthEvent.current = true;
+    setCachedProfile(newUser);
     setUser(newUser);
     return newUser;
   };
 
   const logout = async () => {
     setUser(null);
+    try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch {}
     await supabase.auth.signOut();
   };
 

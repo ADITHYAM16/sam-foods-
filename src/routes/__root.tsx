@@ -113,6 +113,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Inline script: apply theme BEFORE paint to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `
+(function(){
+  try{
+    var t=localStorage.getItem('sam_theme');
+    var dark=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if(dark)document.documentElement.classList.add('dark');
+  }catch(e){}
+})();
+        `}} />
       </head>
       <body>
         {children}
@@ -241,23 +251,21 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
+// True only on the client, never on server — avoids SSR hydration mismatch
+const isBrowser = typeof window !== "undefined";
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  // Only show splash on first visit, not on refresh (SSR-safe)
-  const [splash, setSplash] = useState(() => {
-    if (typeof window === "undefined") return false;
-    // Always show on fresh page load — sessionStorage persists within tab reloads
-    // Remove key on mount so next reload always shows splash
-    const seen = sessionStorage.getItem("sam_splash_done");
-    sessionStorage.removeItem("sam_splash_done");
-    return !seen;
-  });
+  // Start as true on client immediately — no useEffect delay, no flicker
+  const [splash, setSplash] = useState(isBrowser);
   const router = useRouter();
 
+  // Save scroll position before unload so we can restore after splash
   useEffect(() => {
-    // Mark done only after splash finishes so a mid-splash reload shows it again
-    if (!splash) sessionStorage.setItem("sam_splash_done", "1");
-  }, [splash]);
+    const save = () => sessionStorage.setItem("sam_scroll", String(window.scrollY));
+    window.addEventListener("beforeunload", save);
+    return () => window.removeEventListener("beforeunload", save);
+  }, []);
 
   // Handle Supabase OAuth redirect — the hash contains access_token after Google sign-in
   useEffect(() => {
@@ -281,9 +289,22 @@ function RootComponent() {
         <LocationProvider>
           <CartProvider>
             <AnimatePresence mode="wait">
-              {splash && <SplashScreen key="splash" onDone={() => setSplash(false)} />}
+              {splash && (
+                <SplashScreen
+                  key="splash"
+                  onDone={() => {
+                    setSplash(false);
+                    // Restore scroll position after splash
+                    const saved = sessionStorage.getItem("sam_scroll");
+                    if (saved) {
+                      requestAnimationFrame(() => window.scrollTo(0, parseInt(saved, 10)));
+                      sessionStorage.removeItem("sam_scroll");
+                    }
+                  }}
+                />
+              )}
             </AnimatePresence>
-            <div style={{ visibility: splash ? "hidden" : "visible" }}>
+            <div style={{ display: splash ? "none" : "block" }}>
               <Outlet />
             </div>
           </CartProvider>
