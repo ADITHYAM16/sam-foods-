@@ -175,15 +175,16 @@ function CartPage() {
 
   const finalTotal = total;
 
-  const checkout = async () => {
+  const checkout = async (overrideCoords?: { lat: number; lng: number }, overrideAddress?: string) => {
     if (!user) { setShowAuthPrompt(true); return; }
-    if (!deliveryLocation) { setOrderErr("Please enter your delivery location."); return; }
+    const deliveryAddr = overrideAddress ?? deliveryLocation;
+    if (!deliveryAddr) { setOrderErr("Please enter your delivery location."); return; }
 
     // Validate delivery radius
     // Resolve coords: GPS session > saved address coords
-    let coords = gpsCoords;
+    let coords = overrideCoords ?? gpsCoords;
     if (!coords) {
-      const addrEntry = saved.find((a) => a.address.trim() === deliveryLocation.trim());
+      const addrEntry = saved.find((a) => a.address.trim() === deliveryAddr.trim());
       if (addrEntry?.lat != null && addrEntry?.lng != null) coords = { lat: addrEntry.lat, lng: addrEntry.lng };
     }
 
@@ -198,7 +199,7 @@ function CartPage() {
       user_id: user.id,
       customer: user.name,
       email: user.email ?? null,
-      room: deliveryLocation,
+      room: deliveryAddr,
       delivery_lat: gpsCoords?.lat ?? null,
       delivery_lng: gpsCoords?.lng ?? null,
       deliveryTime: "ASAP",
@@ -613,15 +614,32 @@ function CartPage() {
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
               className="w-full max-w-sm rounded-3xl border border-amber-400/30 bg-card p-8 text-center shadow-elegant">
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-amber-500/10">
-                <Navigation className="h-8 w-8 text-amber-500" />
+                <Navigation className={`h-8 w-8 text-amber-500 ${gpsLoading ? "animate-pulse" : ""}`} />
               </div>
               <h3 className="font-[Fraunces] text-2xl font-black">Location Not Recognised</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 We couldn't verify your delivery address. Please use <span className="font-bold text-foreground">"Use my current location"</span> (GPS) so we can confirm you're within our delivery zone.
               </p>
-              <button onClick={() => setLocationError(null)}
-                className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
-                OK, Got it
+              {gpsErr && <p className="mt-2 text-xs text-destructive">{gpsErr}</p>}
+              <button
+                disabled={gpsLoading}
+                onClick={async () => {
+                  setGpsErr(null);
+                  const result = await fetchGPS();
+                  if (result) {
+                    setGpsAddress(result.address);
+                    setGpsCoords({ lat: result.lat, lng: result.lng });
+                    setSelectedAddress(result.address);
+                    setShowManual(false);
+                    setLocationError(null);
+                    // Re-attempt checkout with the newly fetched GPS coords
+                    checkout({ lat: result.lat, lng: result.lng }, result.address);
+                  } else {
+                    setGpsErr("Could not get location. Please enable GPS in your phone settings and try again.");
+                  }
+                }}
+                className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground disabled:opacity-60 flex items-center justify-center gap-2">
+                {gpsLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Fetching location…</> : <><Navigation className="h-4 w-4" /> OK, Got it</>}
               </button>
             </motion.div>
           </motion.div>

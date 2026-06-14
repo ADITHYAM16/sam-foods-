@@ -30,7 +30,7 @@ const CATEGORY_META: Record<string, { icon: React.ElementType; label: string; co
   Desserts:   { icon: IceCream,  label: "Desserts",       color: "text-pink-500" },
 };
 
-function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRating: string | null }) {
+function HeroSection() {
   const scrollY = useMotionValue(0);
   const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
@@ -71,14 +71,6 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
               <UtensilsCrossed className="h-4 w-4" /> Bulk Booking <ArrowRight className="h-4 w-4" />
             </Link>
           </motion.div>
-          <div className="mt-8 flex items-center gap-6 text-sm text-muted-foreground">
-            <div>
-              <div className="text-2xl font-bold text-foreground">{avgRating ? `${avgRating}★` : "4.8★"}</div>
-              <div>{reviewCount > 0 ? `${reviewCount} ratings` : "12k+ ratings"}</div>
-            </div>
-            <div><div className="text-2xl font-bold text-foreground">30 min</div>avg delivery</div>
-            <div><div className="text-2xl font-bold text-foreground">120+</div>signature dishes</div>
-          </div>
         </div>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }} className="relative">
           <motion.img
@@ -88,22 +80,6 @@ function HeroSection({ reviewCount, avgRating }: { reviewCount: number; avgRatin
             alt="SAM signature biryani"
             className="aspect-square w-full rounded-[2rem] object-cover shadow-elegant"
           />
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4 }}
-            className="absolute -left-4 bottom-10 hidden rounded-2xl border border-border bg-card p-3 shadow-elegant md:block"
-          >
-            <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-full gradient-primary text-primary-foreground">
-                <Star className="h-4 w-4 fill-current" />
-              </span>
-              <div>
-                <div className="text-xs text-muted-foreground">Bestseller</div>
-                <div className="text-sm font-bold">Masala Dosa</div>
-              </div>
-            </div>
-          </motion.div>
         </motion.div>
       </motion.div>
     </section>
@@ -187,7 +163,7 @@ function Index() {
 
   return (
     <SiteShell>
-      <HeroSection avgRating={avgRating} reviewCount={reviews.length} />
+      <HeroSection />
 
       {/* ── MENU ── */}
       <section id="menu" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-12 md:px-6">

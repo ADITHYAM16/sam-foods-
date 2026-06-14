@@ -7,7 +7,6 @@ let _menu: FoodItem[] = MENU;
 let _loading = true;
 let _listeners: Array<() => void> = [];
 let _channelReady = false;
-let _fetchPromise: Promise<void> | null = null;
 
 function notify() {
   _listeners.forEach(fn => fn());
@@ -32,10 +31,6 @@ export async function refetchMenu() {
 }
 
 function initMenuStore() {
-  if (!_fetchPromise) {
-    _fetchPromise = refetchMenu();
-  }
-
   if (_channelReady) return;
   _channelReady = true;
 
@@ -77,24 +72,23 @@ export function useMenu() {
   const [loading, setLoading] = useState(_loading);
 
   useEffect(() => {
-    // Always force a fresh fetch on mount to fix missing items bug
-    _fetchPromise = null;
-    initMenuStore();
-
-    // Sync local state from singleton immediately
-    setMenu([..._menu]);
-    setLoading(_loading);
-
-    // Subscribe to future updates
     const listener = () => {
       setMenu([..._menu]);
       setLoading(_loading);
     };
     _listeners.push(listener);
 
+    // Always trigger a fresh fetch on mount so navigating back shows full menu
+    refetchMenu();
+
     return () => {
       _listeners = _listeners.filter(l => l !== listener);
     };
+  }, []);
+
+  // Also init the realtime channel once
+  useEffect(() => {
+    initMenuStore();
   }, []);
 
   return { menu, loading };
