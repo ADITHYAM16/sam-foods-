@@ -141,6 +141,9 @@ function OrderRequestAlert({ req, onAccept, onDeny }: {
             </div>
             <div className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-400">
               {req.room} · ₹{req.total} · {req.payment_method.toUpperCase()} · {req.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
+              <span className="ml-2 font-semibold">
+                · {new Date(req.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+              </span>
             </div>
           </div>
         </div>
@@ -754,8 +757,10 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                         <StatusPill s={o.status} />
                       </div>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      <span>{o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}</span>
+                      <span className="text-muted-foreground/50">·</span>
+                      <span className="font-medium text-foreground/70">{new Date(o.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       {/* Forward-only buttons — only next valid step shown */}
@@ -902,8 +907,10 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                 <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
                   <Clock className="h-4 w-4 text-primary shrink-0" />
                   <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Delivery Time</div>
-                    <div className="text-sm font-semibold">{viewOrder.delivery_time}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Order Placed</div>
+                    <div className="text-sm font-semibold">
+                      {new Date(viewOrder.created_at).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-border bg-background p-3">

@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
 import { LocationProvider } from "@/lib/location-context";
+import { LangProvider } from "@/lib/lang-context";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -286,6 +287,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <LangProvider>
         <LocationProvider>
           <CartProvider>
             <AnimatePresence mode="wait">
@@ -310,6 +312,7 @@ function RootComponent() {
             </AnimatePresence>
           </CartProvider>
         </LocationProvider>
+        </LangProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

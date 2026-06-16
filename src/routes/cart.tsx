@@ -9,6 +9,7 @@ import { useLocation, isWithinDeliveryRadius } from "@/lib/location-context";
 import { submitOrderRequest } from "@/lib/orders-store";
 import { refetchMenu } from "@/lib/menu-hook";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/lib/lang-context";
 
 export const Route = createFileRoute("/cart")({
   component: CartPage,
@@ -34,6 +35,7 @@ function CartPage() {
   const { items, setQty, remove, subtotal, delivery, gst, total, clear } = useCart();
   const { user } = useAuth();
   const { saved, active, gpsLoading, fetchGPS, saveAddress } = useLocation();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   // Validate Razorpay key on mount
@@ -202,7 +204,7 @@ function CartPage() {
       room: deliveryAddr,
       delivery_lat: gpsCoords?.lat ?? null,
       delivery_lng: gpsCoords?.lng ?? null,
-      deliveryTime: "ASAP",
+      deliveryTime: new Date().toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }),
       items, subtotal, delivery_fee: delivery, gst,
       total: finalTotal, discount: 0,
       payment_method: payMethod as "cod" | "gpay",
@@ -255,20 +257,20 @@ function CartPage() {
   return (
     <SiteShell>
       <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
-        <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">Your cart</h1>
-        <p className="mt-1 text-muted-foreground">Review your dishes before we fire the kitchen.</p>
+        <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">{t("Your cart")}</h1>
+        <p className="mt-1 text-muted-foreground">{t("Review your dishes before we fire the kitchen.")}</p>
 
         <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
           <span className="grid h-4 w-4 place-items-center rounded-sm border-2 border-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /></span>
-          <Leaf className="h-3.5 w-3.5" /> 100% Pure Veg checkout
+          <Leaf className="h-3.5 w-3.5" /> {t("100% Pure Veg checkout")}
         </div>
 
         {items.length === 0 ? (
           <div className="mt-12 grid place-items-center rounded-3xl border border-dashed border-border bg-card p-16 text-center">
             <ShoppingBag className="h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-lg font-semibold">Your cart is empty.</p>
-            <p className="text-muted-foreground">Hungry? Add a few dishes to get started.</p>
-            <Link to="/" className="mt-6 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">Browse menu</Link>
+            <p className="mt-4 text-lg font-semibold">{t("Your cart is empty.")}</p>
+            <p className="text-muted-foreground">{t("Hungry? Add a few dishes to get started.")}</p>
+            <Link to="/" className="mt-6 inline-flex rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant">{t("Browse menu")}</Link>
           </div>
         ) : (
           <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -299,7 +301,7 @@ function CartPage() {
                   </motion.div>
                 ))}
               </AnimatePresence>
-              <button onClick={clear} className="text-sm text-muted-foreground hover:text-destructive transition">Clear cart</button>
+              <button onClick={clear} className="text-sm text-muted-foreground hover:text-destructive transition">{t("Clear cart")}</button>
             </div>
 
             {/* ── Order summary sidebar ── */}
@@ -314,8 +316,8 @@ function CartPage() {
                 >
                   <LogIn className="h-4 w-4 shrink-0 text-primary" />
                   <div>
-                    <div className="text-xs font-semibold text-primary">Sign in to place your order</div>
-                    <div className="text-[10px] text-muted-foreground">Quick sign up — takes 30 seconds</div>
+                    <div className="text-xs font-semibold text-primary">{t("Sign in to place your order")}</div>
+                    <div className="text-[10px] text-muted-foreground">{t("Quick sign up — takes 30 seconds")}</div>
                   </div>
                 </button>
               )}
@@ -337,33 +339,33 @@ function CartPage() {
 
               {/* Price breakdown */}
               <div>
-                <Row k="Subtotal" v={`₹${subtotal}`} />
-                <Row k={`Delivery${subtotal > 499 ? " (free above ₹499)" : ""}`} v={delivery === 0 ? "FREE" : `₹${delivery}`} />
-                <Row k="GST (5%)" v={`₹${gst}`} />
+                <Row k={t("Subtotal")} v={`₹${subtotal}`} />
+                <Row k={`${t("Delivery")}${subtotal > 499 ? ` (${t("free above ₹499")})` : ""}`} v={delivery === 0 ? t("FREE") : `₹${delivery}`} />
+                <Row k={t("GST (5%)")} v={`₹${gst}`} />
                 <hr className="my-3 border-border" />
                 <div className="flex items-center justify-between text-lg font-bold">
-                  <span>Total</span><span>₹{finalTotal}</span>
+                  <span>{t("Total")}</span><span>₹{finalTotal}</span>
                 </div>
               </div>
 
               {/* Payment method */}
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment method</label>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Payment method")}</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setPayMethod("cod")}
                     className={`flex items-center justify-center gap-2 rounded-2xl border py-3 text-sm font-semibold transition ${payMethod === "cod" ? "gradient-primary border-transparent text-primary-foreground shadow-elegant" : "border-border bg-background hover:bg-accent"}`}>
-                    <Banknote className="h-4 w-4" /> Cash
+                    <Banknote className="h-4 w-4" /> {t("Cash")}
                   </button>
                   <button type="button" onClick={() => setPayMethod("gpay")}
                     className={`flex items-center justify-center gap-2 rounded-2xl border py-3 text-sm font-semibold transition ${payMethod === "gpay" ? "gradient-primary border-transparent text-primary-foreground shadow-elegant" : "border-border bg-background hover:bg-accent"}`}>
-                    <Smartphone className="h-4 w-4" /> GPay / UPI
+                    <Smartphone className="h-4 w-4" /> {t("GPay / UPI")}
                   </button>
                 </div>
               </div>
 
               {/* Delivery Location */}
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery location</label>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Delivery location")}</label>
 
                 <div className="space-y-1.5">
                   {/* Once GPS address is fetched and selected, show only the address */}
@@ -393,7 +395,7 @@ function CartPage() {
                       className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
                       <Navigation className="h-3.5 w-3.5 shrink-0" />
                       <span className="flex-1 text-left">
-                        {gpsLoading ? "Fetching location…" : "Use my current location"}
+                        {gpsLoading ? t("Fetching location…") : t("Use my current location")}
                       </span>
                     </button>
                   )}
@@ -412,7 +414,7 @@ function CartPage() {
                         : "border-border bg-background text-muted-foreground hover:bg-accent"
                     }`}>
                     <MapPin className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 text-left">Saved addresses / Type address</span>
+                    <span className="flex-1 text-left">{t("Saved addresses / Type address")}</span>
                     {showManual && <X className="h-3.5 w-3.5 shrink-0" />}
                   </button>
 
@@ -430,7 +432,7 @@ function CartPage() {
                           <input
                             value={manualLocation}
                             onChange={e => { setManualLocation(e.target.value); setSelectedAddress(""); setShowGpsPrompt(!!e.target.value.trim()); }}
-                            placeholder="Type your address…"
+                            placeholder={t("Type your address…")}
                             className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-xs outline-none focus:border-primary"
                           />
                           <button
@@ -446,7 +448,7 @@ function CartPage() {
                             }}
                             className="shrink-0 rounded-xl gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
                           >
-                            Use
+                            {t("Use")}
                           </button>
                         </div>
 
@@ -469,7 +471,7 @@ function CartPage() {
                           </div>
                         )}
                         {gpsCoords && selectedAddress && (
-                          <p className="px-1 text-[10px] text-emerald-600 font-semibold">✓ GPS confirmed — your address is saved</p>
+                          <p className="px-1 text-[10px] text-emerald-600 font-semibold">{t("✓ GPS confirmed — your address is saved")}</p>
                         )}
 
                         {saved.filter(a => a.label !== "Current Location").length > 0 && (
@@ -502,7 +504,7 @@ function CartPage() {
               {/* Razorpay key missing warning */}
               {razorpayKeyMissing && payMethod === "gpay" && (
                 <div className="rounded-xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  ⚠️ GPay/UPI is not configured. Please use Cash on Delivery or contact support.
+                  {t("⚠️ GPay/UPI is not configured. Please use Cash on Delivery or contact support.")}
                 </div>
               )}
 
@@ -514,11 +516,11 @@ function CartPage() {
                 className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-[1.02] disabled:opacity-60"
               >
                 {placing
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {payMethod === "gpay" ? "Opening payment…" : "Placing order…"}</>
-                  : <><LogIn className="h-4 w-4" /> {payMethod === "gpay" ? "Pay with GPay / UPI" : `Place order · ₹${finalTotal}`}</>
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {payMethod === "gpay" ? t("Opening payment…") : t("Placing order…")}</>
+                  : <><LogIn className="h-4 w-4" /> {payMethod === "gpay" ? t("Pay with GPay / UPI") : `${t("Place order")} · ₹${finalTotal}`}</>
                 }
               </button>
-              <p className="text-center text-[11px] text-muted-foreground">Secure · UPI / Cash on delivery</p>
+              <p className="text-center text-[11px] text-muted-foreground">{t("Secure · UPI / Cash on delivery")}</p>
             </aside>
           </div>
         )}
@@ -536,9 +538,9 @@ function CartPage() {
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full gradient-primary">
                 <LogIn className="h-8 w-8 text-primary-foreground" />
               </div>
-              <h3 className="font-[Fraunces] text-2xl font-black">Sign in to order</h3>
+              <h3 className="font-[Fraunces] text-2xl font-black">{t("Sign in to order")}</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                You need an account to place an order. It only takes 30 seconds to sign up!
+                {t("You need an account to place an order. It only takes 30 seconds to sign up!")}
               </p>
               <div className="mt-6 flex flex-col gap-3">
                 <Link
@@ -546,12 +548,12 @@ function CartPage() {
                   search={{ redirect: "/cart" } as any}
                   className="flex items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant"
                 >
-                  <LogIn className="h-4 w-4" /> Sign in / Sign up
+                  <LogIn className="h-4 w-4" /> {t("Sign in / Sign up")}
                 </Link>
                 <button
                   onClick={() => setShowAuthPrompt(false)}
                   className="rounded-full border border-border py-3 text-sm font-semibold hover:bg-accent transition">
-                  Back to cart
+                  {t("Back to cart")}
                 </button>
               </div>
             </motion.div>
@@ -569,8 +571,8 @@ function CartPage() {
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-amber-500/10">
                 <Clock className="h-8 w-8 text-amber-500 animate-pulse" />
               </div>
-              <h3 className="font-[Fraunces] text-2xl font-black">Waiting for kitchen</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Your order request has been sent to SAM kitchen. Hang tight — the chef will confirm shortly!</p>
+              <h3 className="font-[Fraunces] text-2xl font-black">{t("Waiting for kitchen")}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t("Your order request has been sent to SAM kitchen. Hang tight — the chef will confirm shortly!")}</p>
               <div className="mt-4 flex items-center justify-center gap-1.5">
                 {[0,1,2].map(i => (
                   <motion.span key={i} className="h-2 w-2 rounded-full bg-amber-500"
@@ -593,13 +595,13 @@ function CartPage() {
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-destructive/10">
                 <MapPin className="h-8 w-8 text-destructive" />
               </div>
-              <h3 className="font-[Fraunces] text-2xl font-black">Out of Delivery Radius</h3>
+              <h3 className="font-[Fraunces] text-2xl font-black">{t("Out of Delivery Radius")}</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Sorry! SAM Foods only delivers within <span className="font-bold text-foreground">10 km</span> of the restaurant. Your location is outside our delivery zone.
+                {t("Sorry! SAM Foods only delivers within")} <span className="font-bold text-foreground">10 km</span> {t("of the restaurant. Your location is outside our delivery zone.")}
               </p>
               <button onClick={() => setLocationError(null)}
                 className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
-                Change Address
+                {t("Change Address")}
               </button>
             </motion.div>
           </motion.div>
@@ -616,9 +618,9 @@ function CartPage() {
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-amber-500/10">
                 <Navigation className={`h-8 w-8 text-amber-500 ${gpsLoading ? "animate-pulse" : ""}`} />
               </div>
-              <h3 className="font-[Fraunces] text-2xl font-black">Location Not Recognised</h3>
+              <h3 className="font-[Fraunces] text-2xl font-black">{t("Location Not Recognised")}</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                We couldn't verify your delivery address. Please use <span className="font-bold text-foreground">"Use my current location"</span> (GPS) so we can confirm you're within our delivery zone.
+                {t("We couldn't verify your delivery address. Please use")} <span className="font-bold text-foreground">{t('"Use my current location"')}</span> {t("(GPS) so we can confirm you're within our delivery zone.")}
               </p>
               {gpsErr && <p className="mt-2 text-xs text-destructive">{gpsErr}</p>}
               <button
@@ -639,7 +641,7 @@ function CartPage() {
                   }
                 }}
                 className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground disabled:opacity-60 flex items-center justify-center gap-2">
-                {gpsLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Fetching location…</> : <><Navigation className="h-4 w-4" /> OK, Got it</>}
+                {gpsLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("Fetching location…")}</> : <><Navigation className="h-4 w-4" /> {t("OK, Got it")}</>}
               </button>
             </motion.div>
           </motion.div>
@@ -656,11 +658,11 @@ function CartPage() {
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-destructive/10">
                 <X className="h-8 w-8 text-destructive" />
               </div>
-              <h3 className="font-[Fraunces] text-2xl font-black">Food sold out 😔</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Sorry, the kitchen is unable to fulfil your order right now. Please come back tomorrow for fresh dishes!</p>
+              <h3 className="font-[Fraunces] text-2xl font-black">{t("Food sold out 😔")}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t("Sorry, the kitchen is unable to fulfil your order right now. Please come back tomorrow for fresh dishes!")}</p>
               <button onClick={() => resetOrderState()}
                 className="mt-6 w-full rounded-full gradient-primary py-3 font-semibold text-primary-foreground">
-                Back to cart
+                {t("Back to cart")}
               </button>
             </motion.div>
           </motion.div>

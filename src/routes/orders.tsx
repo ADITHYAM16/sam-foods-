@@ -6,6 +6,7 @@ import { SiteShell } from "@/components/site/SiteShell";
 import { useAuth } from "@/lib/auth-context";
 import { useMyOrders } from "@/lib/orders-store";
 import type { OrderStatus } from "@/lib/orders-store";
+import { useLanguage } from "@/lib/lang-context";
 
 export const Route = createFileRoute("/orders")({
   component: OrdersPage,
@@ -34,6 +35,7 @@ function OrdersPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const orders = useMyOrders(user?.id);
+  const { t } = useLanguage();
   const [filter, setFilter] = useState<OrderStatus | "All">("All");
 
   useEffect(() => {
@@ -54,9 +56,9 @@ function OrdersPage() {
   return (
     <SiteShell>
       <section className="mx-auto max-w-4xl px-4 py-12 md:px-6">
-        <div className="mb-2 text-xs font-bold uppercase tracking-[0.25em] text-primary">Account</div>
-        <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">My Orders</h1>
-        <p className="mt-1 text-muted-foreground">{orders.length} order{orders.length !== 1 ? "s" : ""} total</p>
+        <div className="mb-2 text-xs font-bold uppercase tracking-[0.25em] text-primary">{t("Account")}</div>
+        <h1 className="font-[Fraunces] text-3xl font-black md:text-5xl">{t("My Orders")}</h1>
+        <p className="mt-1 text-muted-foreground">{orders.length} {orders.length !== 1 ? t("orders total") : t("order total")}</p>
 
         {/* Active orders banner */}
         {activeOrders.length > 0 && (
@@ -67,7 +69,7 @@ function OrdersPage() {
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
               </span>
               <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                {activeOrders.length} active order{activeOrders.length !== 1 ? "s" : ""} in progress
+                {activeOrders.length} {activeOrders.length !== 1 ? t("active orders in progress") : t("active order in progress")}
               </span>
             </div>
             <Link
@@ -75,7 +77,7 @@ function OrdersPage() {
               search={{ orderId: activeOrders[0].id } as any}
               className="rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
             >
-              Track →
+              {t("Track →")}
             </Link>
           </div>
         )}
@@ -92,7 +94,7 @@ function OrdersPage() {
                   : "border border-border bg-background hover:bg-accent"
               }`}
             >
-              {s} {s === "All" ? `(${orders.length})` : `(${orders.filter(o => o.status === s).length})`}
+              {t(s)} {s === "All" ? `(${orders.length})` : `(${orders.filter(o => o.status === s).length})`}
             </button>
           ))}
         </div>
@@ -102,9 +104,9 @@ function OrdersPage() {
           {filtered.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-border p-16 text-center">
               <ShoppingBag className="mx-auto h-12 w-12 text-muted-foreground" />
-              <p className="mt-4 text-lg font-semibold">No orders here yet.</p>
+              <p className="mt-4 text-lg font-semibold">{t("No orders here yet.")}</p>
               <Link to="/" className="mt-4 inline-flex rounded-full gradient-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
-                Browse menu
+                {t("Browse menu")}
               </Link>
             </div>
           ) : (
@@ -141,7 +143,7 @@ function OrdersPage() {
                           {o.items.map(it => `${it.name} ×${it.qty}`).join(", ")}
                         </div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
-                          Deliver to: <span className="font-medium text-foreground">{o.room}</span>
+                          {t("Deliver to:")} <span className="font-medium text-foreground">{o.room}</span>
                         </div>
                       </div>
                     </div>
@@ -159,14 +161,14 @@ function OrdersPage() {
                           search={{ orderId: o.id } as any}
                           className="rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
                         >
-                          Track order →
+                          {t("Track order →")}
                         </Link>
                       ) : o.status === "Delivered" ? (
                         <Link
                           to="/"
                           className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-accent transition"
                         >
-                          Reorder
+                          {t("Reorder")}
                         </Link>
                       ) : null}
                     </div>

@@ -1,6 +1,8 @@
 import { Mail, MapPin, Phone, Clock } from "lucide-react";
+import { useLanguage } from "@/lib/lang-context";
 
 export function Footer() {
+  const { t } = useLanguage();
   return (
     <footer className="mt-16 bg-card/50">
       {/* top orange divider */}
@@ -17,7 +19,7 @@ export function Footer() {
               </span>
               <div className="font-[Fraunces] text-xl font-bold">SAM <span className="text-gradient">Foods</span></div>
             </div>
-            <p className="mt-3 text-sm text-muted-foreground">A single hotel kitchen. Hand-crafted dishes. Delivered with care.</p>
+            <p className="mt-3 text-sm text-muted-foreground">{t("A single hotel kitchen. Hand-crafted dishes. Delivered with care.")}</p>
           </div>
 
           {/* orange divider — vertical on sm+, horizontal on mobile */}
@@ -29,14 +31,14 @@ export function Footer() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Clock className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold uppercase tracking-wider">Hours</h4>
+                <h4 className="text-sm font-semibold uppercase tracking-wider">{t("Hours")}</h4>
               </div>
               {/* orange thin underline */}
               <div className="mb-3 h-px w-12 rounded-full bg-primary opacity-70" />
               <ul className="space-y-1.5 text-sm text-muted-foreground">
-                <li>Mon – Fri · 11:00 – 23:00</li>
-                <li>Sat – Sun · 10:00 – 24:00</li>
-                <li>Bulk orders · 24 / 7</li>
+                <li>{t("Mon – Fri · 11:00 – 23:00")}</li>
+                <li>{t("Sat – Sun · 10:00 – 24:00")}</li>
+                <li>{t("Bulk orders · 24 / 7")}</li>
               </ul>
             </div>
 
@@ -46,7 +48,7 @@ export function Footer() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold uppercase tracking-wider">Reach Us</h4>
+                <h4 className="text-sm font-semibold uppercase tracking-wider">{t("Reach Us")}</h4>
               </div>
               <div className="mb-3 h-px w-12 rounded-full bg-primary opacity-70" />
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -64,11 +66,11 @@ export function Footer() {
 
       <div className="py-4">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 text-xs text-muted-foreground md:flex-row md:px-6">
-          <span>© {new Date().getFullYear()} SAM Foods. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} SAM Foods. {t("All rights reserved.")}</span>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-foreground">Terms</a>
-            <a href="#" className="hover:text-foreground">Privacy</a>
-            <a href="#" className="hover:text-foreground">Refunds</a>
+            <a href="#" className="hover:text-foreground">{t("Terms")}</a>
+            <a href="#" className="hover:text-foreground">{t("Privacy")}</a>
+            <a href="#" className="hover:text-foreground">{t("Refunds")}</a>
           </div>
         </div>
       </div>

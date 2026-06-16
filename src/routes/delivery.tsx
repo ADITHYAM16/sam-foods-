@@ -355,6 +355,9 @@ function DeliveryPage() {
                       </div>
                       <p className="text-sm font-semibold">{o.customer} · ₹{o.total}</p>
                       <p className="text-xs text-muted-foreground">{o.items.map(it => `${it.name} ×${it.qty}`).join(", ")}</p>
+                      <p className="text-xs font-medium text-primary/80">
+                        Ordered: {new Date(o.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                      </p>
                     </div>
 
                     <div className="flex gap-2">
@@ -452,10 +455,8 @@ function DeliveryPage() {
                       </div>
                       <p className="mt-0.5 text-sm font-semibold">{o.customer} · ₹{o.total}</p>
                       {o.created_at && (
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                          {" · "}
-                          {new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          {new Date(o.created_at).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
                         </p>
                       )}
                     </div>

@@ -1,13 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import { useMemo, useState, useEffect } from "react";
-import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed, Coffee, Utensils, Soup, Leaf, IceCream, ChefHat } from "lucide-react";
+import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed, Coffee, Utensils, Leaf, IceCream, ChefHat } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
 import { FoodCard } from "@/components/site/FoodCard";
 import { CATEGORIES, type Category } from "@/lib/menu-data";
 import { useMenu } from "@/lib/menu-hook";
 import { useReviews } from "@/lib/reviews-hook";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/lang-context";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -21,7 +22,6 @@ export const Route = createFileRoute("/")({
 
 type Sort = "popular" | "price-low" | "price-high" | "rating";
 
-// Icon and label for each category section
 const CATEGORY_META: Record<string, { icon: React.ElementType; label: string; color: string }> = {
   Breakfast:  { icon: Coffee,    label: "Breakfast",      color: "text-amber-600" },
   Briyani:    { icon: ChefHat,   label: "Rice & Biryani", color: "text-primary" },
@@ -31,12 +31,12 @@ const CATEGORY_META: Record<string, { icon: React.ElementType; label: string; co
 };
 
 function HeroSection() {
+  const { t } = useLanguage();
   const scrollY = useMotionValue(0);
   const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
 
   useEffect(() => {
-    // Only attach scroll parallax on desktop — causes jank on mobile
     if (window.innerWidth < 768) return;
     const onScroll = () => scrollY.set(window.scrollY);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -54,21 +54,21 @@ function HeroSection() {
       >
         <div>
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-primary" /> Hotel-quality. Delivered in 30 min.
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> {t("Hotel-quality. Delivered in 30 min.")}
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-5 text-4xl font-black leading-[1.05] md:text-7xl">
-            Crave it. <br />
-            <span className="text-gradient">Tap it.</span> Devour it.
+            {t("Crave it.")} <br />
+            <span className="text-gradient">{t("Tap it.")}</span> {t("Devour it.")}
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="mt-5 max-w-md text-lg text-muted-foreground">
-            Welcome to SAM — one hotel, a hundred reasons to stay hungry. From fresh dosas to event-scale catering, we deliver the moment you call.
+            {t("Welcome to SAM — one hotel, a hundred reasons to stay hungry. From fresh dosas to event-scale catering, we deliver the moment you call.")}
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-7 flex flex-wrap items-center gap-3">
             <a href="#menu" className="inline-flex items-center gap-2 rounded-full gradient-primary px-6 py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-105">
-              <Flame className="h-4 w-4" /> Order Now
+              <Flame className="h-4 w-4" /> {t("Order Now")}
             </a>
             <Link to="/bulk-order" className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 px-6 py-3 font-semibold backdrop-blur transition hover:bg-accent">
-              <UtensilsCrossed className="h-4 w-4" /> Bulk Booking <ArrowRight className="h-4 w-4" />
+              <UtensilsCrossed className="h-4 w-4" /> {t("Bulk Booking")} <ArrowRight className="h-4 w-4" />
             </Link>
           </motion.div>
         </div>
@@ -87,6 +87,7 @@ function HeroSection() {
 }
 
 function Index() {
+  const { t } = useLanguage();
   const { menu } = useMenu();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("popular");
@@ -112,7 +113,6 @@ function Index() {
     }
   }, [myReview?.id]);
 
-  // Filter + sort the full menu
   const filtered = useMemo(() => {
     let arr = [...menu];
     if (q) arr = arr.filter(m => (m.name + " " + m.description).toLowerCase().includes(q.toLowerCase()));
@@ -122,7 +122,6 @@ function Index() {
     return arr;
   }, [menu, q, sort]);
 
-  // Group filtered items by category, preserving CATEGORIES order
   const grouped = useMemo(() => {
     return CATEGORIES.map(cat => ({
       cat,
@@ -130,7 +129,6 @@ function Index() {
     })).filter(g => g.items.length > 0);
   }, [filtered]);
 
-  // When a category tab is clicked, scroll to that section
   const scrollToCategory = (cat: Category | "All") => {
     setActiveCategory(cat);
     if (cat === "All") {
@@ -147,18 +145,35 @@ function Index() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (formRating === 0) return setSubmitMsg("Please select a star rating.");
-    if (!formText.trim()) return setSubmitMsg("Please write something.");
+    if (formRating === 0) return setSubmitMsg(t("Please select a star rating."));
+    if (!formText.trim()) return setSubmitMsg(t("Please write something."));
     setSubmitting(true);
     setSubmitMsg(null);
     try {
       await submitReview(user.id, user.name, formRole, formRating, formText.trim());
-      setSubmitMsg("Review submitted! Thank you ❤️");
+      setSubmitMsg(t("Review submitted! Thank you ❤️"));
     } catch (e) {
-      setSubmitMsg(e instanceof Error ? e.message : "Failed to submit.");
+      setSubmitMsg(e instanceof Error ? e.message : t("Failed to submit."));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Category labels translated
+  const catSectionTitle: Record<string, string> = {
+    Breakfast: t("Rise & Shine"),
+    Briyani:   t("Rice & Biryani Varieties"),
+    Meals:     t("Full & Half Meals"),
+    Starters:  t("Snacks & Starters"),
+    Desserts:  t("Sweet Endings"),
+  };
+
+  const catTabLabel: Record<string, string> = {
+    Breakfast: t("Breakfast"),
+    Briyani:   t("Briyani"),
+    Meals:     t("Meals"),
+    Starters:  t("Starters"),
+    Desserts:  t("Desserts"),
   };
 
   return (
@@ -168,11 +183,10 @@ function Index() {
       {/* ── MENU ── */}
       <section id="menu" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-12 md:px-6">
 
-        {/* Header + search + sort */}
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">The Menu</div>
-            <h2 className="mt-2 text-4xl font-black md:text-5xl">Today on the pass</h2>
+            <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">{t("The Menu")}</div>
+            <h2 className="mt-2 text-4xl font-black md:text-5xl">{t("Today on the pass")}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2">
@@ -180,21 +194,21 @@ function Index() {
               <input
                 value={q}
                 onChange={e => setQ(e.target.value)}
-                placeholder="Search dishes…"
+                placeholder={t("Search dishes…")}
                 className="w-32 bg-transparent text-sm outline-none md:w-44"
               />
             </div>
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
               <span className="grid h-4 w-4 place-items-center rounded-sm border-2 border-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /></span>
-              100% Pure Veg
+              {t("100% Pure Veg")}
             </span>
             <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm">
               <Filter className="h-4 w-4" />
               <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="bg-transparent outline-none">
-                <option value="popular">Popular</option>
-                <option value="rating">Top rated</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
+                <option value="popular">{t("Popular")}</option>
+                <option value="rating">{t("Top rated")}</option>
+                <option value="price-low">{t("Price: Low to High")}</option>
+                <option value="price-high">{t("Price: High to Low")}</option>
               </select>
             </div>
           </div>
@@ -211,7 +225,7 @@ function Index() {
                   : "border border-border bg-card hover:bg-accent"
               }`}
             >
-              All
+              {t("All")}
             </button>
             {CATEGORIES.map(c => {
               const meta = CATEGORY_META[c];
@@ -227,7 +241,7 @@ function Index() {
                   }`}
                 >
                   {Icon && <Icon className="h-3.5 w-3.5" />}
-                  {meta?.label ?? c}
+                  {catTabLabel[c] ?? c}
                 </button>
               );
             })}
@@ -236,10 +250,9 @@ function Index() {
 
         {/* ── Category sections ── */}
         {q || sort !== "popular" ? (
-          // When searching or sorting — show flat grid with all results
           <div className="mt-8">
             {filtered.length === 0 ? (
-              <p className="py-16 text-center text-muted-foreground">No dishes match your search.</p>
+              <p className="py-16 text-center text-muted-foreground">{t("No dishes match your search.")}</p>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
                 {filtered.map((m, i) => (
@@ -253,41 +266,31 @@ function Index() {
             )}
           </div>
         ) : (
-          // Default — grouped by category with section headers
           <div className="mt-8 space-y-14">
             {grouped.map(({ cat, items }) => {
               const meta = CATEGORY_META[cat];
               const Icon = meta?.icon;
               return (
                 <div key={cat} id={`cat-${cat}`} className="scroll-mt-32">
-                  {/* Section header */}
                   <div className="mb-5 flex items-center gap-3">
                     {Icon && (
-                      <span className={`grid h-10 w-10 place-items-center rounded-2xl bg-card border border-border shadow-sm`}>
+                      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-card border border-border shadow-sm">
                         <Icon className={`h-5 w-5 ${meta.color}`} />
                       </span>
                     )}
                     <div>
                       <div className={`text-xs font-bold uppercase tracking-widest ${meta?.color ?? "text-primary"}`}>
-                        {meta?.label ?? cat}
+                        {catTabLabel[cat] ?? cat}
                       </div>
                       <h3 className="font-[Fraunces] text-2xl font-black md:text-3xl">
-                        {cat === "Breakfast" && "Rise & Shine"}
-                        {cat === "Briyani" && "Rice & Biryani Varieties"}
-                        {cat === "Meals" && "Full & Half Meals"}
-                        {cat === "Starters" && "Snacks & Starters"}
-                        {cat === "Desserts" && "Sweet Endings"}
+                        {catSectionTitle[cat]}
                       </h3>
                     </div>
                     <span className="ml-auto rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground">
-                      {items.length} item{items.length !== 1 ? "s" : ""}
+                      {items.length} {items.length !== 1 ? t("items") : t("item")}
                     </span>
                   </div>
-
-                  {/* Thin gradient divider */}
                   <div className="mb-6 h-px w-full bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
-
-                  {/* Items grid */}
                   <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
                     {items.map((m, i) => (
                       <motion.div key={m.id} className="flex w-full"
@@ -303,7 +306,7 @@ function Index() {
               );
             })}
             {grouped.length === 0 && (
-              <p className="py-16 text-center text-muted-foreground">No dishes available right now.</p>
+              <p className="py-16 text-center text-muted-foreground">{t("No dishes available right now.")}</p>
             )}
           </div>
         )}
@@ -312,7 +315,7 @@ function Index() {
       {/* REVIEWS */}
       <section className="mx-auto max-w-7xl px-4 py-16 md:px-6">
         <div className="text-center">
-          <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">Loved by our regulars</div>
+          <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary">{t("Loved by our regulars")}</div>
           <motion.h2
             initial={{ opacity: 0, y: 30, rotateX: 10 }}
             whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
@@ -321,7 +324,7 @@ function Index() {
             style={{ transformPerspective: 800 }}
             className="mt-2 text-4xl font-black md:text-5xl"
           >
-            Real reviews. Real plates.
+            {t("Real reviews. Real plates.")}
           </motion.h2>
           {avgRating && (
             <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5">
@@ -344,12 +347,12 @@ function Index() {
           className="mx-auto mt-10 max-w-xl rounded-3xl border border-border bg-card p-6 shadow-elegant"
         >
           <div className="mb-4 font-[Fraunces] text-lg font-bold">
-            {myReview ? "Update your review" : "Write a review"}
+            {myReview ? t("Update your review") : t("Write a review")}
           </div>
           {user ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your rating</div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Your rating")}</div>
                 <div className="flex gap-1">
                   {[1,2,3,4,5].map(s => (
                     <button key={s} type="button"
@@ -364,14 +367,14 @@ function Index() {
                 </div>
               </div>
               <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">You are a</div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("You are a")}</div>
                 <div className="flex flex-wrap gap-2">
                   {["Customer", "Regular", "Event Host", "Office Order"].map(r => (
                     <button key={r} type="button" onClick={() => setFormRole(r)}
                       className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                         formRole === r ? "gradient-primary border-transparent text-primary-foreground" : "border-border bg-background hover:bg-accent"
                       }`}>
-                      {r}
+                      {t(r)}
                     </button>
                   ))}
                 </div>
@@ -379,22 +382,22 @@ function Index() {
               <textarea
                 value={formText}
                 onChange={e => setFormText(e.target.value)}
-                placeholder={myReview ? `Your current: "${myReview.text}"` : "Share your experience…"}
+                placeholder={myReview ? `Your current: "${myReview.text}"` : t("Share your experience…")}
                 rows={3}
                 className="w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
               />
               {submitMsg && (
-                <p className={`text-xs ${submitMsg.includes("Thank") ? "text-emerald-600" : "text-destructive"}`}>{submitMsg}</p>
+                <p className={`text-xs ${submitMsg.includes("Thank") || submitMsg.includes("நன்றி") ? "text-emerald-600" : "text-destructive"}`}>{submitMsg}</p>
               )}
               <button disabled={submitting}
                 className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-elegant transition hover:opacity-95 disabled:opacity-60">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {submitting ? "Submitting…" : myReview ? "Update review" : "Submit review"}
+                {submitting ? t("Submitting…") : myReview ? t("Update review") : t("Submit review")}
               </button>
             </form>
           ) : (
             <p className="text-sm text-muted-foreground">
-              <Link to="/login" search={{ redirect: "/" } as any} className="font-semibold text-primary underline">Sign in</Link> to leave a review.
+              <Link to="/login" search={{ redirect: "/" } as any} className="font-semibold text-primary underline">{t("Sign in")}</Link> {t("to leave a review.")}
             </p>
           )}
         </motion.div>
@@ -403,7 +406,7 @@ function Index() {
           {reviewsLoading ? (
             <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : reviews.length === 0 ? (
-            <p className="py-10 text-center text-muted-foreground">No reviews yet. Be the first!</p>
+            <p className="py-10 text-center text-muted-foreground">{t("No reviews yet. Be the first!")}</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence>
@@ -425,7 +428,7 @@ function Index() {
                         ))}
                       </div>
                       {r.user_id === user?.id && (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Your review</span>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{t("Your review")}</span>
                       )}
                     </div>
                     <p className="mt-3 text-foreground/90">"{r.text}"</p>
