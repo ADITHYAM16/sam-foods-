@@ -73,21 +73,28 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
   const setDefault = async (id: string) => {
     if (!user) return;
-    await (supabase.from("saved_addresses") as any).update({ is_default: false }).eq("user_id", user.id);
-    await (supabase.from("saved_addresses") as any).update({ is_default: true }).eq("id", id);
+    // Optimistic update - instant UI feedback
     setSaved((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })));
+    // Single batch update to DB
+    await (supabase.from("saved_addresses") as any)
+      .update({ is_default: false })
+      .neq("id", id)
+      .eq("user_id", user.id);
+    await (supabase.from("saved_addresses") as any)
+      .update({ is_default: true })
+      .eq("id", id);
   };
 
   const deleteAddress = async (id: string) => {
-    await (supabase.from("saved_addresses") as any).delete().eq("id", id);
+    // Optimistic delete - instant UI feedback
     setSaved((prev) => prev.filter((a) => a.id !== id));
+    await (supabase.from("saved_addresses") as any).delete().eq("id", id);
   };
 
   const fetchGPS = useCallback((): Promise<{ address: string; lat: number; lng: number } | null> => {
     if (!navigator.geolocation) return Promise.resolve(null);
     setGpsLoading(true);
     return new Promise((resolve) => {
-      // Use low accuracy first for fast response on mobile, then high accuracy
       const tryGet = (highAccuracy: boolean) => {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
@@ -95,7 +102,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
             try {
               const ctrl = new AbortController();
-              setTimeout(() => ctrl.abort(), 5000);
+              setTimeout(() => ctrl.abort(), 2500);
               const res = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
                 { signal: ctrl.signal }
@@ -107,9 +114,10 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             if (user) {
               const existing = saved.find((a) => a.label === "Current Location");
               if (existing) {
+                // Optimistic update
+                setSaved((prev) => prev.map((a) => a.id === existing.id ? { ...a, address, lat, lng } : a));
                 (supabase.from("saved_addresses") as any)
-                  .update({ address, lat, lng }).eq("id", existing.id)
-                  .then(() => setSaved((prev) => prev.map((a) => a.id === existing.id ? { ...a, address, lat, lng } : a)));
+                  .update({ address, lat, lng }).eq("id", existing.id);
               } else {
                 saveAddress("Current Location", address, lat, lng);
               }
@@ -118,7 +126,6 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             resolve({ address, lat, lng });
           },
           (err) => {
-            // If high accuracy fails, retry with low accuracy
             if (highAccuracy) {
               tryGet(false);
             } else {
@@ -126,7 +133,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
               resolve(null);
             }
           },
-          { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 8000 : 5000, maximumAge: 30000 }
+          { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 5000 : 3000, maximumAge: 60000 }
         );
       };
       tryGet(true);

@@ -8,13 +8,14 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Navigation, X } from "lucide-react";
 
 import appCss from "../styles.css?url";
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
-import { LocationProvider } from "@/lib/location-context";
+import { LocationProvider, useLocation } from "@/lib/location-context";
 import { LangProvider } from "@/lib/lang-context";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -90,6 +91,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      { rel: "preload", as: "image", href: "/food/IDLY.jpeg" },
+      { rel: "preload", as: "image", href: "/food/masala dosa.jpeg" },
+      { rel: "preload", as: "image", href: "/food/pongal.jpeg" },
+      { rel: "preload", as: "image", href: "/food/full meal.jpeg" },
       { rel: "icon", type: "image/jpeg", href: "/logo.png.jpeg" },
       {
         rel: "stylesheet",
@@ -252,6 +257,108 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
+const LOC_ASKED_KEY = "sam_loc_asked";
+
+function LocationPermissionModal() {
+  const { user } = useAuth();
+  const { fetchGPS, gpsLoading, saved } = useLocation();
+  const [show, setShow] = useState(false);
+  const [denied, setDenied] = useState(false);
+  const asked = useRef(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (sessionStorage.getItem(LOC_ASKED_KEY)) return;
+    // Check if permission already granted — if so, auto-fetch silently
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: "geolocation" as PermissionName }).then((res) => {
+        if (res.state === "granted") {
+          sessionStorage.setItem(LOC_ASKED_KEY, "1");
+          fetchGPS();
+          return;
+        }
+        if (res.state === "denied") {
+          sessionStorage.setItem(LOC_ASKED_KEY, "1");
+          return;
+        }
+        // prompt state — show modal
+        if (!asked.current) { asked.current = true; setShow(true); }
+      }).catch(() => {
+        if (!asked.current) { asked.current = true; setShow(true); }
+      });
+    } else {
+      if (!asked.current) { asked.current = true; setShow(true); }
+    }
+  }, [user]);
+
+  const handleAllow = async () => {
+    setDenied(false);
+    const result = await fetchGPS();
+    if (result) {
+      sessionStorage.setItem(LOC_ASKED_KEY, "1");
+      setShow(false);
+    } else {
+      setDenied(true);
+    }
+  };
+
+  const handleSkip = () => {
+    sessionStorage.setItem(LOC_ASKED_KEY, "1");
+    setShow(false);
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/60 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, y: 100 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 100 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="w-full rounded-t-3xl border-t border-border bg-card p-6 shadow-elegant sm:max-w-md sm:rounded-3xl sm:mb-4"
+      >
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/10">
+            <Navigation className="h-6 w-6 text-primary" />
+          </div>
+          <button onClick={handleSkip} className="mt-0.5 grid h-8 w-8 place-items-center rounded-full hover:bg-accent text-muted-foreground transition">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <h2 className="font-[Fraunces] text-xl font-black">Enable Location</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Allow SAM Foods to access your location so we can auto-fill your delivery address and check if you're within our delivery area.
+        </p>
+        {denied && (
+          <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            Location access was denied. Please enable it in your browser settings, then tap Allow again.
+          </p>
+        )}
+        <div className="mt-5 flex flex-col gap-2">
+          <button
+            onClick={handleAllow}
+            disabled={gpsLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60 transition"
+          >
+            {gpsLoading ? (
+              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />Fetching location…</>
+            ) : (
+              <><Navigation className="h-4 w-4" />Allow Location Access</>
+            )}
+          </button>
+          <button
+            onClick={handleSkip}
+            className="w-full rounded-full border border-border py-3 text-sm font-semibold text-muted-foreground hover:bg-accent transition"
+          >
+            Not now
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // True only on the client, never on server — avoids SSR hydration mismatch
 const isBrowser = typeof window !== "undefined";
 
@@ -296,7 +403,6 @@ function RootComponent() {
                   key="splash"
                   onDone={() => {
                     setSplash(false);
-                    // Restore scroll position after splash
                     const saved = sessionStorage.getItem("sam_scroll");
                     if (saved) {
                       requestAnimationFrame(() => window.scrollTo(0, parseInt(saved, 10)));
@@ -307,6 +413,7 @@ function RootComponent() {
               ) : (
                 <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
                   <Outlet />
+                  <LocationPermissionModal />
                 </motion.div>
               )}
             </AnimatePresence>

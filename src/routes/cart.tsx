@@ -10,6 +10,8 @@ import { submitOrderRequest } from "@/lib/orders-store";
 import { refetchMenu } from "@/lib/menu-hook";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/lib/lang-context";
+import { GPayQRModal } from "@/components/site/GPayQRModal";
+import { createPaymentRecord } from "@/lib/payment-store";
 
 export const Route = createFileRoute("/cart")({
   component: CartPage,
@@ -48,6 +50,9 @@ function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [requestStatus, setRequestStatus] = useState<"waiting" | "denied" | null>(null);
   const [locationError, setLocationError] = useState<"out_of_range" | "unverified" | null>(null);
+  const [showQR, setShowQR] = useState(false);
+  const [qrOrderReqId, setQrOrderReqId] = useState<string | null>(null);
+  const [gpayAcceptedOrderId, setGpayAcceptedOrderId] = useState<string | null>(null);
 
   // Use a ref to hold the active poll/channel cleanup so it survives re-renders
   // without being listed as a useEffect dependency
@@ -77,8 +82,8 @@ function CartPage() {
   }, [items.length]);
 
   // Start watching a request ID for accept/deny — self-contained, no deps on state
-  const watchRequest = (reqId: string) => {
-    cancelWatch(); // cancel any previous watch first
+  const watchRequest = (reqId: string, isGpay = false) => {
+    cancelWatch();
 
     let done = false;
 
@@ -89,9 +94,17 @@ function CartPage() {
       if (status === "accepted" && orderId) {
         setPlacing(false);
         setRequestStatus(null);
-        clearRef.current();
-        refetchMenu();
-        navigateRef.current({ to: "/track", search: { orderId } });
+        if (isGpay) {
+          // GPay: show QR code now that kitchen accepted
+          setQrOrderReqId(reqId);
+          setGpayAcceptedOrderId(orderId);
+          setShowQR(true);
+        } else {
+          // COD: navigate to track
+          clearRef.current();
+          refetchMenu();
+          navigateRef.current({ to: "/track", search: { orderId } });
+        }
       } else {
         setPlacing(false);
         setRequestStatus("denied");
@@ -191,7 +204,8 @@ function CartPage() {
     }
 
     if (!coords) { setLocationError("unverified"); return; }
-    if (!isWithinDeliveryRadius(coords.lat, coords.lng)) { setLocationError("out_of_range"); return; }
+    // TESTING MODE: delivery radius check disabled — re-enable for production
+    // if (!isWithinDeliveryRadius(coords.lat, coords.lng)) { setLocationError("out_of_range"); return; }
 
     // Cancel any previous watch and start fresh
     resetOrderState();
@@ -212,41 +226,45 @@ function CartPage() {
 
     try {
       if (payMethod === "gpay") {
-        const ok = await loadRazorpay();
-        if (!ok) { setOrderErr("Failed to load payment gateway."); setPlacing(false); return; }
-        await new Promise<void>((resolve, reject) => {
-          const rzp = new window.Razorpay({
-            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-            amount: finalTotal * 100,
-            currency: "INR",
-            name: "SAM Foods",
-            description: "Food order payment",
-            method: { upi: true, card: false, netbanking: false, wallet: false },
-            config: { display: { blocks: { upi: { name: "Pay via GPay / UPI", instruments: [{ method: "upi" }] } }, sequence: ["block.upi"], preferences: { show_default_blocks: false } } },
-            prefill: { name: user.name, email: user.email ?? "", contact: "" },
-            theme: { color: "#c2440f" },
-            handler: async (response: { razorpay_payment_id: string; razorpay_order_id?: string }) => {
-              try {
-                const req = await submitOrderRequest({
-                  ...orderPayload,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_order_id: response.razorpay_order_id ?? null,
-                });
-                refetchMenu();
-                setRequestStatus("waiting");
-                watchRequest(req.id);
-                resolve();
-              } catch (e) { reject(e); }
-            },
-            modal: { ondismiss: () => { setPlacing(false); reject(new Error("Payment cancelled.")); } },
-          });
-          rzp.open();
+        // Step 1: Submit order request to admin first
+        const req = await submitOrderRequest(orderPayload);
+        refetchMenu();
+
+        // Step 2: Create pending payment record
+        await createPaymentRecord({
+          order_request_id: req.id,
+          user_id: user.id,
+          customer_name: user.name,
+          customer_email: user.email ?? undefined,
+          customer_phone: user.phone ?? undefined,
+          amount: finalTotal,
+          payment_method: "gpay",
+          payment_status: "pending",
+          notes: `GPay order request sent to kitchen at ${new Date().toLocaleString("en-IN")}`,
         });
+
+        // Step 3: Show "waiting for kitchen" modal — QR shown only after admin accepts
+        setRequestStatus("waiting");
+        watchRequest(req.id, true); // true = gpay flow
       } else {
         const req = await submitOrderRequest(orderPayload);
         refetchMenu();
+        
+        // Create COD payment record
+        await createPaymentRecord({
+          order_request_id: req.id,
+          user_id: user.id,
+          customer_name: user.name,
+          customer_email: user.email ?? undefined,
+          customer_phone: user.phone ?? undefined,
+          amount: finalTotal,
+          payment_method: "cod",
+          payment_status: "pending",
+          notes: `Cash on delivery order placed at ${new Date().toLocaleString("en-IN")}`,
+        });
+        
         setRequestStatus("waiting");
-        watchRequest(req.id);
+        watchRequest(req.id, false);
       }
     } catch (e) {
       setPlacing(false);
@@ -666,6 +684,48 @@ function CartPage() {
               </button>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── GPay QR Modal ── */}
+      <AnimatePresence>
+        {showQR && gpayAcceptedOrderId && (
+          <GPayQRModal
+            acceptedOrderId={gpayAcceptedOrderId}
+            total={finalTotal}
+            onCancelOrder={async (reason) => {
+              const note = reason === "timeout"
+                ? "Payment timeout — user did not pay within 5 minutes"
+                : "Cancelled by user — user refused to pay";
+              await (supabase.from("orders") as any)
+                .update({
+                  status: "Cancelled",
+                  cancelled_at: new Date().toISOString(),
+                  delivery_time: `⚠️ ${note}`,
+                  payment_status: "failed",
+                })
+                .eq("id", gpayAcceptedOrderId);
+            }}
+            onExpire={() => {
+              setShowQR(false);
+              setQrOrderReqId(null);
+              setGpayAcceptedOrderId(null);
+              setOrderErr("Payment time expired. Order has been cancelled.");
+            }}
+            onCancel={async () => {
+              const cancelledId = gpayAcceptedOrderId;
+              setShowQR(false);
+              setQrOrderReqId(null);
+              setGpayAcceptedOrderId(null);
+              clearRef.current();
+              refetchMenu();
+              navigateRef.current({ to: "/orders", search: { cancelled: cancelledId } as any });
+            }}
+            onPaid={() => {
+              clearRef.current();
+              refetchMenu();
+            }}
+          />
         )}
       </AnimatePresence>
     </SiteShell>

@@ -78,7 +78,7 @@ export async function submitOrderRequest(o: Parameters<typeof placeOrder>[0]): P
     total: o.total,
     discount: o.discount,
     payment_method: o.payment_method,
-    payment_status: o.payment_method === "gpay" ? "paid" : "pending",
+    payment_status: "pending",
     razorpay_order_id: o.razorpay_order_id ?? null,
     razorpay_payment_id: o.razorpay_payment_id ?? null,
     status: "pending",
@@ -335,7 +335,7 @@ export async function placeOrder(o: {
       discount: o.discount,
       status: "Placed",
       payment_method: o.payment_method,
-      payment_status: o.payment_method === "gpay" ? "paid" : "pending",
+      payment_status: "pending",
       razorpay_order_id: o.razorpay_order_id ?? null,
       razorpay_payment_id: o.razorpay_payment_id ?? null,
     })
@@ -382,15 +382,32 @@ export function useOrders(): Order[] {
       } catch { /* table may not exist */ }
     };
 
+    // Fetch full order by id — realtime payloads truncate large JSONB fields
+    const fetchById = async (id: string): Promise<Order | null> => {
+      try {
+        const { data } = await (supabase.from("orders") as any)
+          .select("*").eq("id", id).single();
+        return data ? toOrder(data) : null;
+      } catch { return null; }
+    };
+
     fetchOrders();
 
     const channel = supabase
       .channel("orders-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" },
-        ({ new: row }) => setList(prev => [toOrder(row), ...prev])
+        async ({ new: row }) => {
+          // Always re-fetch on INSERT — realtime payload may truncate items JSONB
+          const full = await fetchById((row as any).id);
+          if (full) setList(prev => [full, ...prev.filter(o => o.id !== full.id)]);
+        }
       )
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" },
-        ({ new: row }) => setList(prev => prev.map(o => o.id === (row as any).id ? toOrder(row) : o))
+        async ({ new: row }) => {
+          // Always re-fetch on UPDATE — ensures delivery_time, items, status all current
+          const full = await fetchById((row as any).id);
+          if (full) setList(prev => prev.map(o => o.id === full.id ? full : o));
+        }
       )
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" },
         ({ old: row }) => setList(prev => prev.filter(o => o.id !== (row as any).id))
@@ -530,13 +547,28 @@ export function useMyOrders(userId: string | null | undefined): Order[] {
     const onVisible = () => { if (!document.hidden) fetchMyOrders(); };
     document.addEventListener("visibilitychange", onVisible);
 
+    // Fetch full order by id — realtime payloads truncate large JSONB fields (items)
+    const fetchById = async (id: string): Promise<Order | null> => {
+      try {
+        const { data } = await (supabase.from("orders") as any)
+          .select("*").eq("id", id).single();
+        return data ? toOrder(data) : null;
+      } catch { return null; }
+    };
+
     const channel = supabase
       .channel(`orders-user-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
-        ({ new: row }) => setList(prev => [toOrder(row), ...prev])
+        async ({ new: row }) => {
+          const full = await fetchById((row as any).id);
+          if (full) setList(prev => [full, ...prev.filter(o => o.id !== full.id)]);
+        }
       )
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
-        ({ new: row }) => setList(prev => prev.map(o => o.id === (row as any).id ? toOrder(row) : o))
+        async ({ new: row }) => {
+          const full = await fetchById((row as any).id);
+          if (full) setList(prev => prev.map(o => o.id === full.id ? full : o));
+        }
       )
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
         ({ old: row }) => setList(prev => prev.filter(o => o.id !== (row as any).id))

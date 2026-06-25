@@ -4,7 +4,7 @@ import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
   IndianRupee, Pencil, Plus, ShoppingBag, Trash2,
   Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User, RefreshCw, Activity,
-  Download, ChevronDown, ChevronUp,
+  Download, ChevronDown, ChevronUp, Smartphone, CheckCircle2,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
@@ -109,6 +109,7 @@ function StatusPill({ s }: { s: string }) {
     Pending: "bg-amber-500/10 text-amber-600",
     Placed: "bg-violet-500/10 text-violet-600",
     Ready: "bg-emerald-500/10 text-emerald-600",
+    Cancelled: "bg-destructive/10 text-destructive",
   };
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${map[s] || "bg-muted text-foreground"}`}>{s}</span>;
 }
@@ -245,7 +246,15 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [viewOrder, setViewOrder] = useState<ReturnType<typeof useOrders>[number] | null>(null);
   const [saving, setSaving] = useState(false);
-  const liveOrders = useOrders();
+  const allOrders = useOrders();
+  // GPay orders waiting for payment — yellow pending section
+  const gpayPending = allOrders.filter(
+    o => o.payment_method === "gpay" && o.payment_status === "pending"
+  );
+  // Live orders — COD always + GPay only after paid
+  const liveOrders = allOrders.filter(
+    o => o.payment_method !== "gpay" || o.payment_status === "paid"
+  );
   const { todayRev, weekRev, monthRev, todayOrders, weekOrders, monthOrders, reload: reloadRevenue } = useRevenueStats();
   const [revExpanded, setRevExpanded] = useState(false);
   const [revView, setRevView] = useState<"week" | "month">("week");
@@ -265,6 +274,12 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       const err = await assignNearestAgent(orderId);
       if (err) setAgentError(err);
     }
+  }
+
+  async function markGPayPaid(orderId: string) {
+    await (adminClient.from("orders") as any)
+      .update({ payment_status: "paid" })
+      .eq("id", orderId);
   }
   const [bulkOrders, setBulkOrders] = useState<
     { id: string; name: string; people: number; date: string; status: string }[]
@@ -722,6 +737,79 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           )}
         </AnimatePresence>
 
+        {/* ── GPay Pending Payment section ── */}
+        <AnimatePresence>
+          {gpayPending.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-8">
+              <div className="rounded-3xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/20 p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
+                    <Smartphone className="h-5 w-5 text-amber-600" />
+                    GPay — Awaiting Payment
+                  </h2>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                    </span>
+                    {gpayPending.length} pending
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {gpayPending.map((o) => (
+                    <div key={o.id} className={`rounded-2xl border p-3 ${
+                      o.status === "Cancelled"
+                        ? "border-destructive/40 bg-destructive/5"
+                        : "border-amber-400/30 bg-white dark:bg-amber-950/30"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
+                          <span className="text-sm font-semibold">{o.customer}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px] ${
+                            o.status === "Cancelled" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700"
+                          }`}>{o.room}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold">₹{o.total}</span>
+                          {o.status === "Cancelled" ? (
+                            <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">✕ Cancelled by user</span>
+                          ) : (
+                            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700">⏳ Awaiting Payment</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")} · {new Date(o.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                      </div>
+                      {o.status !== "Cancelled" && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button onClick={() => markGPayPaid(o.id)}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 transition">
+                            <CheckCircle2 className="h-3 w-3" /> Mark Paid — Move to Live Orders
+                          </button>
+                          <button onClick={() => setViewOrder(o)}
+                            className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                        </div>
+                      )}
+                      {o.status === "Cancelled" && (
+                        <div className="mt-2 flex justify-end">
+                          <button onClick={() => setViewOrder(o)}
+                            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ── Live orders + Weekly revenue + Bulk Bookings ── */}
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 rounded-3xl border border-border bg-card p-5">
@@ -740,7 +828,9 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                 {liveOrders.map((o) => (
                   <div key={o.id} className={`rounded-2xl border p-3 transition-colors duration-700 ${
-                    o.status === "Delivered"
+                    o.status === "Cancelled"
+                      ? "border-destructive/40 bg-destructive/10"
+                      : o.status === "Delivered"
                       ? "border-emerald-500/40 bg-emerald-500/20"
                       : o.status === "Out for delivery"
                       ? "border-emerald-400/30 bg-emerald-500/10"
@@ -770,6 +860,12 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                           → {s}
                         </button>
                       ))}
+                      {/* Cancelled by user */}
+                      {o.status === "Cancelled" && (
+                        <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-[10px] font-semibold text-destructive">
+                          ✕ Cancelled by user
+                        </span>
+                      )}
                       {/* Current status badge (read-only) */}
                       {(o.status === "Out for delivery" || o.status === "Delivered" || o.status === "Ready") && (
                         <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${

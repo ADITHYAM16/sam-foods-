@@ -14,6 +14,7 @@ import { useOrders, updateOrderStatus, assignNearestAgent, STATUS_FLOW, type Ord
 import { supabase } from "@/integrations/supabase/client";
 import { resolveImage, resolveDescription } from "@/lib/food-image-resolver";
 import { playBeep } from "@/lib/beep";
+import { Footer } from "@/components/site/Footer";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -540,21 +541,42 @@ function AdminPage() {
                     const next = nextStatus(o.status as OrderStatus);
                     const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
                     const isReady = o.status === "Ready";
+                    const isCancelled = o.status === "Cancelled";
+                    const cancelReason = isCancelled && o.delivery_time?.startsWith("⚠️")
+                      ? o.delivery_time.replace("⚠️ ", "")
+                      : null;
                     return (
-                      <div key={o.id} className="rounded-2xl border border-border p-4">
+                      <div key={o.id} className={`rounded-2xl border p-4 transition ${
+                        isCancelled
+                          ? "border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
+                          : "border-border"
+                      }`}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
-                              <span className="font-semibold">{o.customer}</span>
+                              <span className={`font-semibold ${isCancelled ? "text-red-700 dark:text-red-400" : ""}`}>{o.customer}</span>
                               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">📍 {o.room}</span>
-                              <span className="text-[10px] text-muted-foreground">· {o.delivery_time} · {time}</span>
+                              <span className="text-[10px] text-muted-foreground">· {isCancelled ? "" : o.delivery_time + " · "}{time}</span>
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">{o.items.map(i => `${i.name} ×${i.qty}`).join(", ")}</div>
+                            {/* Cancellation reason */}
+                            {cancelReason && (
+                              <div className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-2.5 py-1.5">
+                                <X className="h-3 w-3 shrink-0 text-red-600" />
+                                <span className="text-[11px] font-semibold text-red-700 dark:text-red-400">{cancelReason}</span>
+                              </div>
+                            )}
+                            {isCancelled && !cancelReason && (
+                              <div className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 px-2.5 py-1.5">
+                                <X className="h-3 w-3 shrink-0 text-red-600" />
+                                <span className="text-[11px] font-semibold text-red-700 dark:text-red-400">Cancelled by customer</span>
+                              </div>
+                            )}
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-1.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold">₹{o.total}</span>
+                              <span className={`font-bold ${isCancelled ? "text-red-600 line-through opacity-60" : ""}`}>₹{o.total}</span>
                               <StatusPill s={o.status} />
                             </div>
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -566,25 +588,23 @@ function AdminPage() {
                             </span>
                           </div>
                         </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {/* Advance status */}
-                          {next && (
-                            <button onClick={() => handleAdvanceOrder(o.id, next)}
-                              className={`rounded-full px-4 py-1.5 text-[11px] font-bold text-primary-foreground shadow-elegant transition hover:scale-105 active:scale-95 ${next === "Ready" ? "bg-emerald-600 hover:bg-emerald-700" : "gradient-primary"}`}>
-                              {next === "Preparing" ? "🍳 Start Preparing" : "✅ Mark Ready & Notify Agent"}
-                            </button>
-                          )}
-                          {/* Manual agent assign — shown for Ready orders */}
-                          {isReady && (
-                            <button onClick={() => setAssignOrderId(o.id)}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[11px] font-semibold hover:bg-accent transition">
-                              <UserCheck className="h-3.5 w-3.5 text-primary" /> Assign Agent
-                            </button>
-                          )}
-                          {/* Set delivery time */}
-                          <SetDeliveryTime orderId={o.id} current={o.delivery_time} />
-                          {o.status === "Cancelled" && <div className="text-xs text-destructive font-semibold">Cancelled by customer</div>}
-                        </div>
+                        {!isCancelled && (
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {next && (
+                              <button onClick={() => handleAdvanceOrder(o.id, next)}
+                                className={`rounded-full px-4 py-1.5 text-[11px] font-bold text-primary-foreground shadow-elegant transition hover:scale-105 active:scale-95 ${next === "Ready" ? "bg-emerald-600 hover:bg-emerald-700" : "gradient-primary"}`}>
+                                {next === "Preparing" ? "🍳 Start Preparing" : "✅ Mark Ready & Notify Agent"}
+                              </button>
+                            )}
+                            {isReady && (
+                              <button onClick={() => setAssignOrderId(o.id)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[11px] font-semibold hover:bg-accent transition">
+                                <UserCheck className="h-3.5 w-3.5 text-primary" /> Assign Agent
+                              </button>
+                            )}
+                            <SetDeliveryTime orderId={o.id} current={o.delivery_time} />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -851,6 +871,8 @@ function AdminPage() {
       <AnimatePresence>
         {assignOrderId && <AssignAgentModal orderId={assignOrderId} onClose={() => setAssignOrderId(null)} />}
       </AnimatePresence>
+
+      <Footer />
     </div>
   );
 }

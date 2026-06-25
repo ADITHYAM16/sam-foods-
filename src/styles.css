@@ -157,7 +157,6 @@
     color: var(--color-foreground);
     font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
-    scroll-behavior: smooth;
     /* Mobile scroll performance */
     -webkit-overflow-scrolling: touch;
   }
@@ -199,22 +198,27 @@
   [role="button"]:not(:disabled) {
     position: relative;
     overflow: hidden;
-    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.12s ease, box-shadow 0.18s ease;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
   }
 
-  button:not(:disabled):hover,
-  [role="button"]:not(:disabled):hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 6px 20px -4px oklch(0.68 0.20 40 / 0.30);
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled),
+    [role="button"]:not(:disabled) {
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.12s ease, box-shadow 0.18s ease;
+    }
+
+    button:not(:disabled):hover,
+    [role="button"]:not(:disabled):hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 20px -4px oklch(0.68 0.20 40 / 0.30);
+    }
   }
 
   button:not(:disabled):active,
   [role="button"]:not(:disabled):active {
-    transform: translateY(1px) scale(0.96);
+    transform: scale(0.96);
     opacity: 0.88;
-    box-shadow: none;
   }
 
   @keyframes _ripple {
@@ -222,19 +226,21 @@
     to   { transform: scale(4); opacity: 0; }
   }
 
-  button:not(:disabled)::after,
-  [role="button"]:not(:disabled)::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle, currentColor 1%, transparent 1%) center / 100% 100% no-repeat;
-    opacity: 0;
-    pointer-events: none;
-  }
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled)::after,
+    [role="button"]:not(:disabled)::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle, currentColor 1%, transparent 1%) center / 100% 100% no-repeat;
+      opacity: 0;
+      pointer-events: none;
+    }
 
-  button:not(:disabled):active::after,
-  [role="button"]:not(:disabled):active::after {
-    animation: _ripple 0.38s ease-out forwards;
+    button:not(:disabled):active::after,
+    [role="button"]:not(:disabled):active::after {
+      animation: _ripple 0.38s ease-out forwards;
+    }
   }
 }
 
@@ -263,7 +269,7 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
-  /* GPU-accelerate modals and drawers */
+  /* GPU-accelerate modals */
   .fixed {
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;

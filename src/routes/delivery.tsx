@@ -13,6 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { playBeep } from "@/lib/beep";
 import { AdminShell } from "@/components/AdminShell";
+import { Footer } from "@/components/site/Footer";
 
 export const Route = createFileRoute("/delivery")(({
   component: DeliveryPage,
@@ -479,6 +480,8 @@ function DeliveryPage() {
 
         <div className="h-8" />
       </section>
+
+      <Footer />
     </AdminShell>
   );
 }

@@ -42,6 +42,7 @@ function ProfilePage() {
   const [addrSaving, setAddrSaving] = useState(false);
   const [showAddrForm, setShowAddrForm] = useState(false);
   const [addrOutOfRange, setAddrOutOfRange] = useState(false);
+  const [showGpsPrompt, setShowGpsPrompt] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", search: { redirect: "/profile" } as any });
@@ -51,16 +52,23 @@ function ProfilePage() {
     if (user) { setName(user.name); setPhone(user.phone ?? ""); }
   }, [user]);
 
+  useEffect(() => {
+    if (!user || !saved) return;
+    if (saved.length === 0) {
+      const t = setTimeout(() => setShowGpsPrompt(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, [user, saved]);
+
   const saveProfile = async () => {
     if (!name.trim()) return setProfileMsg({ type: "err", text: "Name cannot be empty." });
     setProfileSaving(true);
-    setProfileMsg(null);
+    setProfileMsg({ type: "ok", text: "Profile updated!" }); // Optimistic
     try {
       const { error } = await (supabase.from("profiles") as any)
         .update({ name: name.trim(), phone: phone.trim() || null })
         .eq("id", user!.id);
       if (error) throw new Error(error.message);
-      setProfileMsg({ type: "ok", text: "Profile updated!" });
     } catch (e) {
       setProfileMsg({ type: "err", text: e instanceof Error ? e.message : "Failed to update profile." });
     } finally {
@@ -92,28 +100,40 @@ function ProfilePage() {
     setAddrSaving(true);
     const addressStr = parts.join(", ");
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressStr + ", Tamil Nadu, India")}`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressStr + ", Tamil Nadu, India")}`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (data.length > 0) {
         const lat = parseFloat(data[0].lat);
         const lng = parseFloat(data[0].lon);
-        console.log("Latitude:", lat);
-        console.log("Longitude:", lng);
         if (!isWithinDeliveryRadius(lat, lng)) { setAddrOutOfRange(true); setAddrSaving(false); return; }
         await saveAddress(label || "Home", addressStr, lat, lng);
       } else {
         setAddrOutOfRange(true); setAddrSaving(false); return;
       }
-    } catch { setAddrOutOfRange(true); setAddrSaving(false); return; }
+    } catch (e) { 
+      if ((e as Error).name === 'AbortError') {
+        setAddrOutOfRange(true); 
+      }
+      setAddrSaving(false); 
+      return; 
+    }
     setAddrSaving(false);
     setAddrForm(EMPTY_ADDR);
     setShowAddrForm(false);
   };
 
   const handleGPS = async () => {
-    await fetchGPS();
+    setShowGpsPrompt(false); // Close prompt immediately for snappy UX
+    const res = await fetchGPS();
+    if (!res) {
+      setAddrOutOfRange(true);
+    }
   };
 
   if (loading || !user) {
@@ -268,6 +288,36 @@ function ProfilePage() {
           </div>
 
           {/* GPS fetch */}
+          {showGpsPrompt && saved.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 rounded-2xl border border-primary/40 bg-primary/5 p-4"
+            >
+              <div className="mb-2 text-sm font-semibold text-foreground">First time here?</div>
+              <p className="mb-3 text-xs text-muted-foreground">Let us fetch your location automatically to prefill your delivery address.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGPS}
+                  disabled={gpsLoading}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full gradient-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {gpsLoading ? (
+                    <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />Fetching…</>
+                  ) : (
+                    <><Navigation className="h-4 w-4" />Use my location</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowGpsPrompt(false)}
+                  className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent"
+                >
+                  Skip
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           <button
             onClick={handleGPS}
             disabled={gpsLoading}
@@ -281,10 +331,11 @@ function ProfilePage() {
           <AnimatePresence>
             {showAddrForm && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-4 overflow-hidden"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="mb-4"
               >
                 <div className="rounded-2xl border border-border bg-background p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-2">
@@ -367,9 +418,8 @@ function ProfilePage() {
           ) : (
             <div className="space-y-2">
               {saved.filter(a => a.label !== "Current Location").map(a => (
-                <motion.div
+                <div
                   key={a.id}
-                  layout
                   className={`flex items-start gap-3 rounded-2xl border px-4 py-3 transition ${
                     a.is_default ? "border-primary/50 bg-primary/5" : "border-border bg-background hover:border-primary/20"
                   }`}
@@ -402,7 +452,7 @@ function ProfilePage() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                </motion.div>
+                </div>
               ))}
             </div>
           )}

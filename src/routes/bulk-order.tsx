@@ -410,7 +410,7 @@ function Receipt({ order, onClose }: { order: BulkOrderRow; onClose: () => void 
 /* ── Payment Page ─────────────────────────────────────────── */
 const OWNER_UPI = import.meta.env.VITE_OWNER_UPI_ID || "samfoods@upi";
 
-function PaymentPage({ order, onPaid }: { order: BulkOrderRow; onPaid: (updated: BulkOrderRow) => void }) {
+function PaymentPage({ order, onPaid, onCancel }: { order: BulkOrderRow; onPaid: (updated: BulkOrderRow) => void; onCancel: () => void }) {
   const [step, setStep] = useState<"pay" | "confirm">("pay");
   const [txnId, setTxnId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -539,6 +539,15 @@ function PaymentPage({ order, onPaid }: { order: BulkOrderRow; onPaid: (updated:
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Cancel Payment */}
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10 transition"
+        >
+          <X className="h-4 w-4" /> Cancel Payment
+        </button>
       </motion.div>
     </section>
   );
@@ -860,7 +869,14 @@ function BulkOrderPage() {
         {/* Payment */}
         {stage === "payment" && acceptedOrder && (
           <motion.div key="payment" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <PaymentPage order={acceptedOrder} onPaid={handlePaid} />
+            <PaymentPage order={acceptedOrder} onPaid={handlePaid} onCancel={async () => {
+              await (supabase.from("bulk_orders") as any)
+                .update({ status: "Cancelled" }).eq("id", acceptedOrder.id);
+              clearProgress();
+              setAcceptedOrder(null);
+              setStage("denied");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }} />
           </motion.div>
         )}
 

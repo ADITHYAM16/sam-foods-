@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { Package, ChefHat, Bike, CheckCircle2, PackageCheck, Ban, Loader2, ShoppingBag } from "lucide-react";
 import { motion } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -34,9 +34,19 @@ const STATUS_ICON: Record<string, React.ElementType> = {
 function OrdersPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const orders = useMyOrders(user?.id);
+  const search = useSearch({ strict: false }) as { cancelled?: string };
+  const rawOrders = useMyOrders(user?.id);
   const { t } = useLanguage();
   const [filter, setFilter] = useState<OrderStatus | "All">("All");
+
+  // Optimistically mark a just-cancelled GPay order as Cancelled
+  // so it shows red immediately without waiting for DB round-trip
+  const orders = useMemo(() => {
+    if (!search.cancelled) return rawOrders;
+    return rawOrders.map(o =>
+      o.id === search.cancelled ? { ...o, status: "Cancelled" as OrderStatus } : o
+    );
+  }, [rawOrders, search.cancelled]);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", search: { redirect: "/orders" } as any });
@@ -119,7 +129,11 @@ function OrdersPage() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="rounded-2xl border border-border bg-card p-4 transition hover:border-primary/30 hover:shadow-sm"
+                  className={`rounded-2xl border p-4 transition hover:shadow-sm ${
+                    o.status === "Cancelled"
+                      ? "border-destructive/40 bg-destructive/5"
+                      : "border-border bg-card hover:border-primary/30"
+                  }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-3">

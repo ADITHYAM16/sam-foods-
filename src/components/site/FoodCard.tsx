@@ -18,7 +18,7 @@ function toggleFavStorage(id: string): boolean {
   return next.includes(id);
 }
 
-export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }) {
+export function FoodCard({ item, index = 0, priority = false }: { item: FoodItem; index?: number; priority?: boolean }) {
   const { add } = useCart();
   const { t } = useLanguage();
   const [fav, setFav] = useState(false);
@@ -46,7 +46,11 @@ export function FoodCard({ item, index = 0 }: { item: FoodItem; index?: number }
         <img
           src={resolveImage(item.name, item.image ?? "", item.category)}
           alt={item.name}
-          loading="lazy"
+          loading={priority || index < 4 ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={index < 4 ? "high" : "low"}
+          width={400}
+          height={267}
           className={`absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110 ${isSoldOut ? "grayscale brightness-50" : ""}`}
         />
 

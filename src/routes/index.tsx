@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useMemo, useState, useEffect } from "react";
 import { ArrowRight, Filter, Flame, Loader2, Search, Send, Sparkles, Star, UtensilsCrossed, Coffee, Utensils, Leaf, IceCream, ChefHat } from "lucide-react";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -32,26 +32,16 @@ const CATEGORY_META: Record<string, { icon: React.ElementType; label: string; co
 
 function HeroSection() {
   const { t } = useLanguage();
-  const scrollY = useMotionValue(0);
-  const heroY = useSpring(useTransform(scrollY, [0, 400], [0, 40]), { stiffness: 80, damping: 20 });
-  const heroScale = useTransform(scrollY, [0, 400], [1, 0.96]);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    if (window.innerWidth < 768) return;
-    const onScroll = () => scrollY.set(window.scrollY);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [scrollY]);
-
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    setIsMobile(window.innerWidth < 768);
+  }, []);
 
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 gradient-hero" aria-hidden />
-      <motion.div
-        style={isMobile ? {} : { y: heroY, scale: heroScale }}
-        className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-2 md:px-6 md:py-24"
-      >
+      <div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-2 md:px-6 md:py-24">
         <div>
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-primary" /> {t("Hotel-quality. Delivered in 30 min.")}
@@ -81,7 +71,7 @@ function HeroSection() {
             className="aspect-square w-full rounded-[2rem] object-cover shadow-elegant"
           />
         </motion.div>
-      </motion.div>
+      </div>
     </section>
   );
 }
@@ -259,7 +249,7 @@ function Index() {
                   <motion.div key={m.id} className="flex w-full"
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(i * 0.03, 0.3) }}>
-                    <FoodCard item={m} index={i} />
+                    <FoodCard item={m} index={i} priority={i < 4} />
                   </motion.div>
                 ))}
               </div>
@@ -298,7 +288,7 @@ function Index() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         transition={{ delay: Math.min(i * 0.04, 0.3), duration: 0.4, ease: "easeOut" }}
                       >
-                        <FoodCard item={m} index={i} />
+                        <FoodCard item={m} index={i} priority={i < 4} />
                       </motion.div>
                     ))}
                   </div>
