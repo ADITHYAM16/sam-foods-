@@ -359,7 +359,11 @@ export function Navbar() {
                   </div>
                 </button>
 
-                {/* Language toggle — mobile drawer */}
+              </nav>
+
+              {/* Bottom actions */}
+              <div className="border-t border-border p-4 space-y-2">
+                {/* Language toggle — always visible at bottom */}
                 <button
                   onClick={() => setLang(lang === "en" ? "ta" : "en")}
                   className="flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-sm font-semibold hover:bg-accent transition"
@@ -372,10 +376,6 @@ export function Navbar() {
                     {lang === "en" ? "தமிழ்" : "EN"}
                   </span>
                 </button>
-              </nav>
-
-              {/* Bottom actions */}
-              <div className="border-t border-border p-4 space-y-2">
                 {user ? (
                   <>
                     <div className="flex items-center gap-3 rounded-2xl bg-accent px-4 py-3">
