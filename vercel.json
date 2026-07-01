@@ -1,5 +1,10 @@
 {
   "buildCommand": "npm run build",
+<<<<<<< HEAD
    "installCommand": "npm install",
   "outputDirectory": "dist"
+=======
+  "installCommand": "npm install",
+  "framework": null
+>>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
 }
