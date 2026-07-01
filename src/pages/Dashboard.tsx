@@ -4,12 +4,79 @@ import {
   BarChart3, Bell, ChefHat, CheckCircle, XCircle,
   IndianRupee, Pencil, Plus, ShoppingBag, Trash2,
   Utensils, X, AlertTriangle, Eye, MapPin, CreditCard, Clock, User, RefreshCw, Activity,
+  Download, ChevronDown, ChevronUp, Smartphone, CheckCircle2,
 } from "lucide-react";
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, type OrderStatus, assignNearestAgent } from "@/lib/orders-store";
 import { supabase } from "@/integrations/supabase/client";
 import { adminClient } from "@/lib/admin-client";
+
+/* ─── Excel export helper ─────────────────────────────────── */
+function exportToExcel(rows: Record<string, any>[], filename: string) {
+  const headers = Object.keys(rows[0] ?? {});
+  const csv = [
+    headers.join(","),
+    ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? "")).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `${filename}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ─── Revenue hook (today / week / monthly) ───────────────── */
+function useRevenueStats() {
+  const [todayRev, setTodayRev] = useState(0);
+  const [weekRev, setWeekRev] = useState(0);
+  const [monthRev, setMonthRev] = useState(0);
+  const [todayOrders, setTodayOrders] = useState<any[]>([]);
+  const [weekOrders, setWeekOrders] = useState<any[]>([]);
+  const [monthOrders, setMonthOrders] = useState<any[]>([]);
+
+  const load = useCallback(async () => {
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+    const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 6); weekStart.setHours(0,0,0,0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const { data } = await (adminClient.from("orders") as any)
+      .select("id,customer,room,total,items,created_at,payment_method,status")
+      .neq("status", "Cancelled")
+      .gte("created_at", monthStart.toISOString())
+      .order("created_at", { ascending: false });
+
+    const all = (data as any[]) ?? [];
+    const todays = all.filter(o => new Date(o.created_at) >= todayStart);
+    const weeks = all.filter(o => new Date(o.created_at) >= weekStart);
+
+    setTodayOrders(todays); setWeekOrders(weeks); setMonthOrders(all);
+    setTodayRev(todays.reduce((s: number, o: any) => s + Number(o.total), 0));
+    setWeekRev(weeks.reduce((s: number, o: any) => s + Number(o.total), 0));
+    setMonthRev(all.reduce((s: number, o: any) => s + Number(o.total), 0));
+  }, []);
+
+  // Initial load + midnight refresh
+  useEffect(() => {
+    load();
+    const now = new Date();
+    const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    const mid = setTimeout(() => { load(); }, msToMidnight);
+    return () => clearTimeout(mid);
+  }, [load]);
+
+  // Realtime order updates
+  useEffect(() => {
+    const ch = adminClient.channel("revenue-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, load)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, load)
+      .subscribe();
+    return () => { adminClient.removeChannel(ch); };
+  }, [load]);
+
+  return { todayRev, weekRev, monthRev, todayOrders, weekOrders, monthOrders, reload: load };
+}
 
 /* ─── Types ───────────────────────────────────────────────── */
 interface OrderRequest {
@@ -42,6 +109,7 @@ function StatusPill({ s }: { s: string }) {
     Pending: "bg-amber-500/10 text-amber-600",
     Placed: "bg-violet-500/10 text-violet-600",
     Ready: "bg-emerald-500/10 text-emerald-600",
+    Cancelled: "bg-destructive/10 text-destructive",
   };
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${map[s] || "bg-muted text-foreground"}`}>{s}</span>;
 }
@@ -74,6 +142,9 @@ function OrderRequestAlert({ req, onAccept, onDeny }: {
             </div>
             <div className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-400">
               {req.room} · ₹{req.total} · {req.payment_method.toUpperCase()} · {req.items.map(i => `${i.name} ×${i.qty}`).join(", ")}
+              <span className="ml-2 font-semibold">
+                · {new Date(req.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+              </span>
             </div>
           </div>
         </div>
@@ -175,7 +246,18 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [viewOrder, setViewOrder] = useState<ReturnType<typeof useOrders>[number] | null>(null);
   const [saving, setSaving] = useState(false);
-  const liveOrders = useOrders();
+  const allOrders = useOrders();
+  // GPay orders waiting for payment — yellow pending section
+  const gpayPending = allOrders.filter(
+    o => o.payment_method === "gpay" && o.payment_status === "pending"
+  );
+  // Live orders — COD always + GPay only after paid
+  const liveOrders = allOrders.filter(
+    o => o.payment_method !== "gpay" || o.payment_status === "paid"
+  );
+  const { todayRev, weekRev, monthRev, todayOrders, weekOrders, monthOrders, reload: reloadRevenue } = useRevenueStats();
+  const [revExpanded, setRevExpanded] = useState(false);
+  const [revView, setRevView] = useState<"week" | "month">("week");
 
   const ADMIN_STATUS_FLOW: OrderStatus[] = ["Placed", "Preparing", "Ready"];
 
@@ -192,6 +274,12 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       const err = await assignNearestAgent(orderId);
       if (err) setAgentError(err);
     }
+  }
+
+  async function markGPayPaid(orderId: string) {
+    await (adminClient.from("orders") as any)
+      .update({ payment_status: "paid" })
+      .eq("id", orderId);
   }
   const [bulkOrders, setBulkOrders] = useState<
     { id: string; name: string; people: number; date: string; status: string }[]
@@ -416,8 +504,51 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
     await (supabase.from("menu_items") as any).delete().eq("id", id);
   }
 
+  // Map of known item IDs to their local /food/ image paths
+  const LOCAL_IMAGES: Record<string, string> = {
+    bf1:  "/food/IDLY.jpeg",
+    bf2:  "/food/kal dosa.jpeg",
+    bf3:  "/food/NYC dosa.jpeg",
+    bf4:  "/food/plain dosa.jpeg",
+    bf5:  "/food/masala dosa.jpeg",
+    bf6:  "/food/podi dosa.jpeg",
+    bf7:  "/food/onion uththappam.jpeg",
+    bf8:  "/food/plain dosa.jpeg",
+    bf9:  "/food/pongal.jpeg",
+    bf10: "/food/kitchadi.jpeg",
+    bf11: "/food/upma.jpeg",
+    bf12: "/food/keerai dosa.jpeg",
+    bf13: "/food/ravi rotti.jpeg",
+    bf14: "/food/mysore masala dosa.jpeg",
+    bf15: "/food/Thakkali dosa.jpeg",
+    sn1:  "/food/medu vadai.jpeg",
+    sn2:  "/food/kara vadai.jpeg",
+    ml1:  "/food/full meal.jpeg",
+    ml2:  "/food/half meals.jpeg",
+    rb1:  "/food/mushroom biriyani.jpeg",
+    rb2:  "/food/veg biryani.jpeg",
+    rb3:  "/food/Ghee rice.jpeg",
+    rb4:  "/food/tomato rice.jpeg",
+    rb5:  "/food/curd rice.jpeg",
+    rb6:  "/food/lemon rice.jpeg",
+    rb7:  "/food/puli rice.jpeg",
+    sp1:  "/food/kothu parotta.jpeg",
+    ds1:  "/food/kesari.jpeg",
+  };
+
+  const [fixingImages, setFixingImages] = useState(false);
+  async function fixAllImages() {
+    setFixingImages(true);
+    const updates = Object.entries(LOCAL_IMAGES).map(([id, image]) =>
+      (adminClient.from("menu_items") as any).update({ image }).eq("id", id)
+    );
+    await Promise.all(updates);
+    await loadMenu();
+    setFixingImages(false);
+  }
+
   const stats = [
-    { label: "Today's Revenue", value: `₹${liveOrders.reduce((s, o) => s + o.total, 0).toLocaleString()}`, icon: IndianRupee, trend: "Live" },
+    { label: "Today's Revenue", value: `₹${todayRev.toLocaleString()}`, icon: IndianRupee, trend: "Live" },
     { label: "Orders", value: String(liveOrders.length), icon: ShoppingBag, trend: "Live" },
     { label: "Pending Requests", value: String(requests.length), icon: Bell, trend: requests.length > 0 ? "!" : "" },
     { label: "Menu Items", value: String(items.length), icon: Utensils, trend: "" },
@@ -467,24 +598,217 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
 
         {/* ── Stats ── */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((s, i) => (
-            <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
-                  <s.icon className="h-5 w-5" />
-                </span>
-                {s.trend && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.trend === "!" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-600/10 text-emerald-600"}`}>
-                    {s.trend === "!" ? "Pending" : s.trend}
+          {stats.map((s, i) => {
+            const isRevCard = s.label === "Today's Revenue";
+            return isRevCard ? (
+              <motion.button
+                key={s.label}
+                type="button"
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                onClick={() => setRevExpanded(v => !v)}
+                className="rounded-2xl border border-border bg-card p-5 shadow-sm text-left cursor-pointer hover:border-primary/50 hover:shadow-md transition w-full"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
+                    <s.icon className="h-5 w-5" />
                   </span>
-                )}
-              </div>
-              <div className="mt-3 text-2xl font-bold">{s.value}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
-            </motion.div>
-          ))}
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-600/10 text-emerald-600">Live</span>
+                    {revExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </div>
+                <div className="mt-3 text-2xl font-bold">{s.value}</div>
+                <div className="text-xs text-muted-foreground">Today's Revenue — click for breakdown</div>
+              </motion.button>
+            ) : (
+              <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
+                    <s.icon className="h-5 w-5" />
+                  </span>
+                  {s.trend && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.trend === "!" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-600/10 text-emerald-600"}`}>
+                      {s.trend === "!" ? "Pending" : s.trend}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 text-2xl font-bold">{s.value}</div>
+                <div className="text-xs text-muted-foreground">{s.label}</div>
+              </motion.div>
+            );
+          })}
         </div>
+
+        {/* ── Revenue Breakdown (click on Today's Revenue) ── */}
+        <AnimatePresence>
+          {revExpanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-4 rounded-3xl border border-border bg-card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-full border border-border bg-background p-1">
+                      {(["week", "month"] as const).map((v) => (
+                        <button key={v} onClick={() => setRevView(v)}
+                          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition capitalize ${
+                            revView === v ? "gradient-primary text-primary-foreground" : "text-muted-foreground"
+                          }`}>
+                          {v === "week" ? "This Week" : "This Month"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold">₹{(revView === "week" ? weekRev : monthRev).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{revView === "week" ? "Last 7 days" : "This month"}</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const orders = revView === "week" ? weekOrders : monthOrders;
+                        const label = revView === "week" ? "weekly" : "monthly";
+                        exportToExcel(
+                          orders.map(o => ({
+                            Date: new Date(o.created_at).toLocaleDateString("en-IN"),
+                            Time: new Date(o.created_at).toLocaleTimeString("en-IN"),
+                            Customer: o.customer,
+                            Location: o.room,
+                            Items: o.items?.map((i: any) => `${i.name} x${i.qty}`).join(" | "),
+                            Total: o.total,
+                            Payment: o.payment_method,
+                            Status: o.status,
+                          })),
+                          `sam-revenue-${label}-${new Date().toISOString().slice(0,10)}`
+                        );
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent transition"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Export
+                    </button>
+                  </div>
+                </div>
+
+                {/* Today's revenue download */}
+                <div className="mb-3 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Today's Revenue</div>
+                    <div className="text-lg font-bold">₹{todayRev.toLocaleString()}</div>
+                  </div>
+                  <button
+                    onClick={() => exportToExcel(
+                      todayOrders.map(o => ({
+                        Date: new Date(o.created_at).toLocaleDateString("en-IN"),
+                        Time: new Date(o.created_at).toLocaleTimeString("en-IN"),
+                        Customer: o.customer,
+                        Location: o.room,
+                        Items: o.items?.map((i: any) => `${i.name} x${i.qty}`).join(" | "),
+                        Total: o.total,
+                        Payment: o.payment_method,
+                        Status: o.status,
+                      })),
+                      `sam-revenue-today-${new Date().toISOString().slice(0,10)}`
+                    )}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent transition"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Today
+                  </button>
+                </div>
+
+                {/* Order rows */}
+                <div className="max-h-[320px] overflow-y-auto space-y-1.5 pr-1">
+                  {(revView === "week" ? weekOrders : monthOrders).map((o: any) => (
+                    <div key={o.id} className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2 text-xs">
+                      <div className="min-w-0">
+                        <span className="font-semibold">{o.customer}</span>
+                        <span className="ml-2 text-muted-foreground">{o.room}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-bold">₹{o.total}</span>
+                        <span className="text-muted-foreground">{new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── GPay Pending Payment section ── */}
+        <AnimatePresence>
+          {gpayPending.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-8">
+              <div className="rounded-3xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/20 p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
+                    <Smartphone className="h-5 w-5 text-amber-600" />
+                    GPay — Awaiting Payment
+                  </h2>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                    </span>
+                    {gpayPending.length} pending
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {gpayPending.map((o) => (
+                    <div key={o.id} className={`rounded-2xl border p-3 ${
+                      o.status === "Cancelled"
+                        ? "border-destructive/40 bg-destructive/5"
+                        : "border-amber-400/30 bg-white dark:bg-amber-950/30"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
+                          <span className="text-sm font-semibold">{o.customer}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px] ${
+                            o.status === "Cancelled" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700"
+                          }`}>{o.room}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold">₹{o.total}</span>
+                          {o.status === "Cancelled" ? (
+                            <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">✕ Cancelled by user</span>
+                          ) : (
+                            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700">⏳ Awaiting Payment</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")} · {new Date(o.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                      </div>
+                      {o.status !== "Cancelled" && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button onClick={() => markGPayPaid(o.id)}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 transition">
+                            <CheckCircle2 className="h-3 w-3" /> Mark Paid — Move to Live Orders
+                          </button>
+                          <button onClick={() => setViewOrder(o)}
+                            className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                        </div>
+                      )}
+                      {o.status === "Cancelled" && (
+                        <div className="mt-2 flex justify-end">
+                          <button onClick={() => setViewOrder(o)}
+                            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Live orders + Weekly revenue + Bulk Bookings ── */}
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
@@ -504,7 +828,9 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                 {liveOrders.map((o) => (
                   <div key={o.id} className={`rounded-2xl border p-3 transition-colors duration-700 ${
-                    o.status === "Delivered"
+                    o.status === "Cancelled"
+                      ? "border-destructive/40 bg-destructive/10"
+                      : o.status === "Delivered"
                       ? "border-emerald-500/40 bg-emerald-500/20"
                       : o.status === "Out for delivery"
                       ? "border-emerald-400/30 bg-emerald-500/10"
@@ -521,8 +847,10 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                         <StatusPill s={o.status} />
                       </div>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      <span>{o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}</span>
+                      <span className="text-muted-foreground/50">·</span>
+                      <span className="font-medium text-foreground/70">{new Date(o.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       {/* Forward-only buttons — only next valid step shown */}
@@ -532,6 +860,12 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                           → {s}
                         </button>
                       ))}
+                      {/* Cancelled by user */}
+                      {o.status === "Cancelled" && (
+                        <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-[10px] font-semibold text-destructive">
+                          ✕ Cancelled by user
+                        </span>
+                      )}
                       {/* Current status badge (read-only) */}
                       {(o.status === "Out for delivery" || o.status === "Delivered" || o.status === "Ready") && (
                         <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
@@ -569,10 +903,20 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
                 <ChefHat className="h-5 w-5 text-primary" /> Manage Menu
               </h2>
-              <button onClick={() => setEditing({ id: "new", name: "", description: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "" })}
-                className="inline-flex items-center gap-1 rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
-                <Plus className="h-3.5 w-3.5" /> Add item
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fixAllImages}
+                  disabled={fixingImages}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent transition disabled:opacity-60"
+                >
+                  {fixingImages ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  {fixingImages ? "Fixing…" : "Fix Images"}
+                </button>
+                <button onClick={() => setEditing({ id: "new", name: "", description: "", price: 0, rating: 4.5, category: "Starters", veg: true, image: "" })}
+                  className="inline-flex items-center gap-1 rounded-full gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
+                  <Plus className="h-3.5 w-3.5" /> Add item
+                </button>
+              </div>
             </div>
             <div className="max-h-[480px] overflow-y-auto pr-1">
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -659,8 +1003,10 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                 <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
                   <Clock className="h-4 w-4 text-primary shrink-0" />
                   <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Delivery Time</div>
-                    <div className="text-sm font-semibold">{viewOrder.delivery_time}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Order Placed</div>
+                    <div className="text-sm font-semibold">
+                      {new Date(viewOrder.created_at).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-border bg-background p-3">
@@ -709,11 +1055,38 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                     onChange={(e) => setEditing({ ...editing, price: +e.target.value })} />
                   <select className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary transition"
                     value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as FoodItem["category"] })}>
-                    {["Briyani","Meals","Starters","Drinks","Desserts"].map((c) => <option key={c}>{c}</option>)}
+                    {["Breakfast","Briyani","Meals","Starters","Desserts"].map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </div>
-                <input className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary transition"
-                  placeholder="Image URL" value={editing.image} onChange={(e) => setEditing({ ...editing, image: e.target.value })} />
+
+                {/* Image upload */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Food Image</label>
+                  <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 px-4 py-5 hover:border-primary hover:bg-primary/5 transition">
+                    {editing.image ? (
+                      <img src={editing.image} alt="preview" className="h-24 w-24 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                        <Plus className="h-6 w-6" />
+                        <span className="text-xs">Click to upload image</span>
+                      </div>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">{editing.image ? "Click to change" : "JPG, PNG, WEBP"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setEditing({ ...editing, image: ev.target?.result as string });
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={editing.veg} onChange={(e) => setEditing({ ...editing, veg: e.target.checked })} className="accent-primary" />
                   <span className="text-muted-foreground">Vegetarian</span>

@@ -129,21 +129,31 @@ export function useOrders(): Order[] {
         if (data) setList(data.map(toOrder));
       });
 
+    // Fetch full order by id — realtime payloads truncate large JSONB fields
+    const fetchById = async (id: string): Promise<Order | null> => {
+      try {
+        const { data } = await (adminClient.from("orders") as any)
+          .select("*").eq("id", id).single();
+        return data ? toOrder(data) : null;
+      } catch { return null; }
+    };
+
     // Use anon supabase for realtime — service role cannot receive postgres_changes
     const channel = supabase
       .channel("orders-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" },
-        ({ new: row }) => setList(prev => [toOrder(row), ...prev])
+        async ({ new: row }) => {
+          const full = await fetchById((row as any).id);
+          if (full) setList(prev => [full, ...prev.filter(o => o.id !== full.id)]);
+        }
       )
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" },
-        ({ new: row }) => {
-          const updated = toOrder(row);
+        async ({ new: row }) => {
+          const full = await fetchById((row as any).id);
+          if (!full) return;
           setList(prev => {
-            if (prev.some(o => o.id === updated.id)) {
-              return prev.map(o => o.id === updated.id ? updated : o);
-            }
-            // Row appeared via realtime but wasn't in initial fetch — add it
-            return [updated, ...prev];
+            if (prev.some(o => o.id === full.id)) return prev.map(o => o.id === full.id ? full : o);
+            return [full, ...prev];
           });
         }
       )

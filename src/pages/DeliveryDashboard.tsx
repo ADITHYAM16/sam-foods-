@@ -313,7 +313,6 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs text-muted-foreground">{o.id}</span>
                           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Room {o.room}</span>
-                          <span className="text-[10px] text-muted-foreground">· {o.delivery_time}</span>
                           <StatusPill s={o.status} />
                         </div>
                         <div className="mt-1 font-semibold">{o.customer} · ₹{o.total}</div>
@@ -322,8 +321,8 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
                           {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
                         </div>
                         {o.created_at && (
-                          <div className="mt-0.5 text-xs text-muted-foreground">
-                            Ordered at {new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          <div className="mt-0.5 text-xs font-medium text-primary/80">
+                            Ordered: {new Date(o.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
                           </div>
                         )}
                         <div className="mt-0.5 text-xs text-muted-foreground capitalize">
@@ -365,8 +364,8 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
                       </div>
                       <div className="mt-0.5 text-sm font-semibold">{o.customer} · ₹{o.total}</div>
                       {o.created_at && (
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        <div className="text-xs font-semibold text-muted-foreground">
+                          {new Date(o.created_at).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
                         </div>
                       )}
                     </div>
