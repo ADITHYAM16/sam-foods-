@@ -1,32 +1,4 @@
 {
-<<<<<<< HEAD
-  "name": "samfoods-admin",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "clsx": "^2.1.1",
-    "framer-motion": "^12.38.0",
-    "lucide-react": "^0.575.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "tailwind-merge": "^3.5.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.2.1",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^5.0.4",
-    "tailwindcss": "^4.2.1",
-    "typescript": "^5.8.3",
-    "vite": "^7.3.1"
-=======
   "name": "tanstack_start_ts",
   "private": true,
   "sideEffects": false,
@@ -123,6 +95,5 @@
     "globals": "^15.15.0",
     "prettier": "^3.7.3",
     "typescript-eslint": "^8.56.1"
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
   }
 }
