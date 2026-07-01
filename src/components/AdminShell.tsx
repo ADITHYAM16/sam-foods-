@@ -1,42 +1,9 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-<<<<<<< HEAD
-import { ExternalLink, LayoutDashboard, LogOut, Menu, Moon, Sun, Users, UtensilsCrossed, X, Bike, Bell, History, Activity } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
-
-function useScrollDirection() {
-  const [hidden, setHidden] = useState(false);
-  const lastY = useRef(0);
-  useEffect(() => {
-    const onScroll = () => {
-      if (window.innerWidth < 768) {
-        setHidden(false);
-        return;
-      }
-      const y = window.scrollY;
-      if (Math.abs(y - lastY.current) < 6) return;
-      setHidden(y > lastY.current && y > 60);
-      lastY.current = y;
-    };
-    const onResize = () => {
-      if (window.innerWidth < 768) setHidden(false);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-    };
-  }, []);
-  return hidden;
-}
-
-=======
 import { ExternalLink, LayoutDashboard, LogOut, Menu, Moon, Sun, Users, UtensilsCrossed, X, Bike, Bell, History } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
 type AdminTab = "dashboard" | "agents" | "bulk-orders" | "delivery";
 
 function useTheme() {
@@ -62,13 +29,8 @@ interface AdminShellProps {
   children: ReactNode;
   activeTab?: AdminTab;
   onNavigate?: (tab: AdminTab) => void;
-<<<<<<< HEAD
-  onDeliveryTabChange?: (tab: "home" | "requests" | "deliveries" | "history") => void;
-  activeDeliveryTab?: "requests" | "deliveries" | "history" | null;
-=======
   onDeliveryTabChange?: (tab: "requests" | "deliveries" | "history") => void;
   activeDeliveryTab?: "requests" | "deliveries" | "history";
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
   pendingBulk?: number;
 }
 
@@ -78,21 +40,12 @@ const ADMIN_NAV_ITEMS = [
   { tab: "bulk-orders" as AdminTab, label: "Bulk Orders", icon: UtensilsCrossed },
 ] as const;
 
-<<<<<<< HEAD
-export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChange, activeDeliveryTab: externalActiveDeliveryTab = null, pendingBulk = 0 }: AdminShellProps) {
-=======
 export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChange, activeDeliveryTab = "deliveries", pendingBulk = 0 }: AdminShellProps) {
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
-<<<<<<< HEAD
-  const activeDeliveryTab = externalActiveDeliveryTab;
-  const navHidden = useScrollDirection();
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -105,13 +58,7 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
     return () => document.removeEventListener("mousedown", handler);
   }, [drawerOpen]);
 
-<<<<<<< HEAD
-  const siteUrl = window.location.origin.includes("5174")
-    ? window.location.origin.replace("5174", "5173")
-    : window.location.origin;
-=======
   const siteUrl = window.location.origin;
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
 
   const isAdmin = user?.role === "admin";
   const isDelivery = user?.role === "delivery";
@@ -119,22 +66,9 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
   const showAdminNav = isAdmin && onNavigate;
   const showDeliveryViews = isDelivery;
 
-<<<<<<< HEAD
-  const handleDeliveryTabChange = (tab: "home" | "requests" | "deliveries" | "history") => {
-    if (onDeliveryTabChange) onDeliveryTabChange(tab);
-  };
-
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header
-        className="sticky top-0 z-50 transition-transform duration-300"
-        style={{ transform: navHidden ? "translateY(-100%)" : "translateY(0)" }}
-      >
-=======
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <header className="sticky top-0 z-50">
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
         <div className="glass border-b border-border/60">
           <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 md:px-6">
 
@@ -186,13 +120,6 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
               </div>
             )}
 
-<<<<<<< HEAD
-            <div className="flex-1" />
-
-            <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-emerald-600 sm:inline-flex">
-              <Activity className="h-3.5 w-3.5 animate-pulse" />
-              Live Sync
-=======
             {showDeliveryViews && (
               <div className="hidden items-center gap-1 rounded-full border border-border bg-background/60 p-1 sm:flex">
                 {([
@@ -224,7 +151,6 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                 <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
               </span>
               Live
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
             </span>
 
             <a href={siteUrl} target="_blank" rel="noopener noreferrer"
@@ -237,11 +163,7 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
             </button>
 
             {user && (
-<<<<<<< HEAD
-              <div className="relative flex shrink-0">
-=======
               <div className="relative">
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
                 <button
                   onClick={() => setProfileOpen((v) => !v)}
                   className="flex items-center gap-2 rounded-full border border-border bg-background/60 px-2 py-1.5 hover:bg-accent transition"
@@ -253,14 +175,8 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                 </button>
                 {profileOpen && (
                   <motion.div
-<<<<<<< HEAD
-                    initial={{ opacity: 0, y: -6, scale: 0.95 }} 
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    className="absolute right-0 top-[calc(100%+0.5rem)] w-56 max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-elegant z-[100]"
-=======
                     initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
                     className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-elegant"
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
                   >
                     <div className="px-3 py-2">
                       <div className="text-sm font-semibold">{user.name}</div>
@@ -329,10 +245,6 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                 </div>
               )}
 
-<<<<<<< HEAD
-              {/* Admin Navigation */}
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
               {showAdminNav && (
                 <nav className="mt-4 flex-1 space-y-1 px-4">
                   <div className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Navigation</div>
@@ -358,37 +270,19 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                 </nav>
               )}
 
-<<<<<<< HEAD
-              {/* Delivery Agent Views */}
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
               {showDeliveryViews && (
                 <nav className="mt-4 flex-1 space-y-1 px-4">
                   <div className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Delivery Views</div>
                   {[
-<<<<<<< HEAD
-                    { id: "home" as const, label: "Home", icon: LayoutDashboard },
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
                     { id: "requests" as const, label: "Requests", icon: Bell },
                     { id: "deliveries" as const, label: "Deliveries", icon: Bike },
                     { id: "history" as const, label: "History", icon: History },
                   ].map(({ id, label, icon: Icon }) => (
                     <button
                       key={id}
-<<<<<<< HEAD
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleDeliveryTabChange(id);
-                        setDrawerOpen(false);
-                      }}
-                      type="button"
-                      className={`relative flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-=======
                       type="button"
                       onClick={() => { onDeliveryTabChange?.(id); setDrawerOpen(false); }}
                       className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
                         activeDeliveryTab === id
                           ? "gradient-primary text-primary-foreground shadow-sm"
                           : "hover:bg-accent text-foreground"
@@ -401,10 +295,6 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                 </nav>
               )}
 
-<<<<<<< HEAD
-              {/* Bottom actions */}
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
               <div className="mt-auto space-y-2 border-t border-border p-4">
                 <a href={siteUrl} target="_blank" rel="noopener noreferrer"
                   className="flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-sm font-semibold hover:bg-accent transition">
