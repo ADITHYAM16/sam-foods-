@@ -101,7 +101,7 @@ function ProfilePage() {
     const addressStr = parts.join(", ");
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressStr + ", Tamil Nadu, India")}`,
         { signal: controller.signal }
@@ -129,9 +129,13 @@ function ProfilePage() {
   };
 
   const handleGPS = async () => {
-    setShowGpsPrompt(false); // Close prompt immediately for snappy UX
+    setShowGpsPrompt(false);
     const res = await fetchGPS();
-    if (!res) {
+    if (res === "denied") {
+      setAddrOutOfRange(false);
+      // Show a clear permission-denied message instead of "out of range"
+      setProfileMsg({ type: "err", text: "Location access is blocked. Go to your browser Settings → Site permissions → Location and allow this site, then try again." });
+    } else if (!res) {
       setAddrOutOfRange(true);
     }
   };

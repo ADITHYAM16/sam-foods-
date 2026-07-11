@@ -321,7 +321,8 @@ function AdminPage() {
   const prevOrderCount = useRef(0);
 
   useEffect(() => {
-    if (!loading && (!user || user.role !== "admin")) navigate({ to: "/owner/login" });
+    if (loading) return;
+    if (!user || user.role !== "admin") navigate({ to: "/owner/login" });
   }, [user, loading, navigate]);
 
   const [activeTab, setActiveTab] = useState<"orders" | "menu" | "bulk">("orders");
@@ -411,7 +412,7 @@ function AdminPage() {
     setQuotingId(null); setQuoteAmount(""); setQuoteErr(null);
   };
 
-  if (loading || !user) return (
+  if (loading || !user || user.role !== "admin") return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-border border-t-primary" />
     </div>
@@ -462,18 +463,18 @@ function AdminPage() {
         </div>
 
         {/* ── Tabs ── */}
-        <div className="mt-8 flex gap-2 rounded-2xl border border-border bg-card p-1.5">
+        <div className="mt-8 flex gap-1.5 rounded-2xl border border-border bg-card p-1.5">
           {([
             { key: "orders", label: "Live Orders", icon: ShoppingBag },
             { key: "menu", label: "Menu", icon: Utensils },
-            { key: "bulk", label: "Bulk Bookings", icon: Users },
+            { key: "bulk", label: "Bulk", icon: Users },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl min-h-[44px] px-2 text-xs font-semibold transition sm:gap-2 sm:text-sm ${
                 activeTab === t.key ? "gradient-primary text-primary-foreground shadow-elegant" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               }`}>
-              <t.icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{t.label}</span>
+              <t.icon className="h-4 w-4 shrink-0" />
+              <span>{t.label}</span>
             </button>
           ))}
         </div>
@@ -536,7 +537,7 @@ function AdminPage() {
                   No orders match your filters.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                <div className="space-y-3 md:max-h-[600px] md:overflow-y-auto pr-1">
                   {filteredOrders.map((o) => {
                     const next = nextStatus(o.status as OrderStatus);
                     const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });

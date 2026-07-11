@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Loader2, Lock, Mail, Phone, User } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail, Phone, User } from "lucide-react";
 import { AuthShell } from "@/components/site/AuthShell";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,8 +58,8 @@ function RegisterPage() {
         <Field icon={<Mail className="h-4 w-4" />} type="email" placeholder="Email" value={email} onChange={setEmail} />
         <Field icon={<Phone className="h-4 w-4" />} placeholder="Phone number" value={phone} onChange={setPhone} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field icon={<Lock className="h-4 w-4" />} type="password" placeholder="Password" value={pw} onChange={setPw} />
-          <Field icon={<Lock className="h-4 w-4" />} type="password" placeholder="Confirm password" value={cpw} onChange={setCpw} />
+          <PasswordField placeholder="Password" value={pw} onChange={setPw} />
+          <PasswordField placeholder="Confirm password" value={cpw} onChange={setCpw} />
         </div>
         <label className="flex items-start gap-2 text-sm text-muted-foreground">
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 accent-primary" />
@@ -72,5 +72,24 @@ function RegisterPage() {
         <p className="text-center text-sm text-muted-foreground">Already with us? <Link to="/login" search={{ redirect: "/" } as any} className="font-semibold text-primary hover:underline">Sign in</Link></p>
       </form>
     </AuthShell>
+  );
+}
+
+function PasswordField({ placeholder, value, onChange }: { placeholder: string; value: string; onChange: (v: string) => void }) {
+  const [show, setShow] = useState(false);
+  return (
+    <label className="flex items-center gap-2 rounded-2xl border border-border bg-background px-4 py-3 transition focus-within:border-primary focus-within:shadow-glow">
+      <span className="text-muted-foreground"><Lock className="h-4 w-4" /></span>
+      <input
+        type={show ? "text" : "password"}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+      />
+      <button type="button" onClick={() => setShow(v => !v)} className="shrink-0 text-muted-foreground">
+        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </label>
   );
 }

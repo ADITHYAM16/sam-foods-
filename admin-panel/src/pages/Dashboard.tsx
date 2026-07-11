@@ -194,12 +194,12 @@ function useWeeklyRevenue() {
   return bars;
 }
 
-const CHART_HEIGHT_PX = 280;
+const CHART_HEIGHT_PX = 200;
 
 function WeeklyRevenueChart() {
   const bars = useWeeklyRevenue();
   return (
-    <div className="rounded-3xl border border-border bg-card p-5">
+    <div className="rounded-3xl border-2 border-black/30 dark:border-white/20 bg-card p-5">
       <h2 className="mb-3 font-[Fraunces] text-xl font-bold flex items-center gap-2">
         <BarChart3 className="h-5 w-5 text-primary" /> Weekly Revenue
       </h2>
@@ -606,7 +606,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                 type="button"
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                 onClick={() => setRevExpanded(v => !v)}
-                className="rounded-2xl border border-border bg-card p-5 shadow-sm text-left cursor-pointer hover:border-primary/50 hover:shadow-md transition w-full"
+                className="rounded-2xl border-2 border-black/30 dark:border-white/20 bg-card p-5 shadow-sm text-left cursor-pointer hover:shadow-md transition w-full"
               >
                 <div className="flex items-center justify-between">
                   <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
@@ -622,7 +622,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               </motion.button>
             ) : (
               <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                className="rounded-2xl border-2 border-black/30 dark:border-white/20 bg-card p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <span className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground">
                     <s.icon className="h-5 w-5" />
@@ -647,7 +647,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 rounded-3xl border border-border bg-card p-5">
+              <div className="mt-4 rounded-3xl border-2 border-black/30 dark:border-white/20 bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div className="flex items-center gap-2">
                     <div className="flex rounded-full border border-border bg-background p-1">
@@ -737,82 +737,84 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           )}
         </AnimatePresence>
 
-        {/* ── GPay Pending Payment section ── */}
-        <AnimatePresence>
-          {gpayPending.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-8">
-              <div className="rounded-3xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/20 p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
-                    <Smartphone className="h-5 w-5 text-amber-600" />
-                    GPay — Awaiting Payment
-                  </h2>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
-                    </span>
-                    {gpayPending.length} pending
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {gpayPending.map((o) => (
-                    <div key={o.id} className={`rounded-2xl border p-3 ${
-                      o.status === "Cancelled"
-                        ? "border-destructive/40 bg-destructive/5"
-                        : "border-amber-400/30 bg-white dark:bg-amber-950/30"
-                    }`}>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
-                          <span className="text-sm font-semibold">{o.customer}</span>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px] ${
-                            o.status === "Cancelled" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700"
-                          }`}>{o.room}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold">₹{o.total}</span>
-                          {o.status === "Cancelled" ? (
-                            <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">✕ Cancelled by user</span>
-                          ) : (
-                            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700">⏳ Awaiting Payment</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")} · {new Date(o.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
-                      </div>
-                      {o.status !== "Cancelled" && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <button onClick={() => markGPayPaid(o.id)}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 transition">
-                            <CheckCircle2 className="h-3 w-3" /> Mark Paid — Move to Live Orders
-                          </button>
-                          <button onClick={() => setViewOrder(o)}
-                            className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
-                            <Eye className="h-3 w-3" /> View
-                          </button>
-                        </div>
-                      )}
-                      {o.status === "Cancelled" && (
-                        <div className="mt-2 flex justify-end">
-                          <button onClick={() => setViewOrder(o)}
-                            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
-                            <Eye className="h-3 w-3" /> View
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* ── GPay (left) + Live Orders (right) ── */}
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
 
-        {/* ── Live orders + Weekly revenue + Bulk Bookings ── */}
-        <div className="mt-8 grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl border border-border bg-card p-5">
+          {/* LEFT — GPay Awaiting Payment */}
+          <div className="rounded-3xl border-2 border-black/30 dark:border-white/20 bg-amber-50 dark:bg-amber-950/20 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
+                <Smartphone className="h-5 w-5 text-amber-600" />
+                GPay — Awaiting Payment
+              </h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                </span>
+                {gpayPending.length} pending
+              </span>
+            </div>
+            {gpayPending.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-amber-300/50 p-8 text-center text-sm text-amber-700/60">
+                No GPay orders awaiting payment.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                {gpayPending.map((o) => (
+                  <div key={o.id} className={`rounded-2xl border p-3 ${
+                    o.status === "Cancelled"
+                      ? "border-destructive/40 bg-destructive/5"
+                      : "border-amber-400/30 bg-white dark:bg-amber-950/30"
+                  }`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
+                        <span className="text-sm font-semibold">{o.customer}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px] ${
+                          o.status === "Cancelled" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700"
+                        }`}>{o.room}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold">₹{o.total}</span>
+                        {o.status === "Cancelled" ? (
+                          <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">✕ Cancelled</span>
+                        ) : (
+                          <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700">⏳ Awaiting</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")} · {new Date(o.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                    </div>
+                    {o.status !== "Cancelled" && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button onClick={() => markGPayPaid(o.id)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 transition">
+                          <CheckCircle2 className="h-3 w-3" /> Mark Paid
+                        </button>
+                        <button onClick={() => setViewOrder(o)}
+                          className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                          <Eye className="h-3 w-3" /> View
+                        </button>
+                      </div>
+                    )}
+                    {o.status === "Cancelled" && (
+                      <div className="mt-2 flex justify-end">
+                        <button onClick={() => setViewOrder(o)}
+                          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
+                          <Eye className="h-3 w-3" /> View
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT — Live Orders */}
+          <div className="rounded-3xl border-2 border-black/30 dark:border-white/20 bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-[Fraunces] text-xl font-bold">Live Orders</h2>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600">
@@ -853,20 +855,15 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                       <span className="font-medium text-foreground/70">{new Date(o.created_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      {/* Forward-only buttons — only next valid step shown */}
                       {adminButtons(o.status).map((s) => (
                         <button key={s} onClick={() => handleAdminStatus(o.id, s)}
                           className="rounded-full gradient-primary px-2.5 py-1 text-[10px] font-bold text-primary-foreground shadow-sm transition hover:opacity-90">
                           → {s}
                         </button>
                       ))}
-                      {/* Cancelled by user */}
                       {o.status === "Cancelled" && (
-                        <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-[10px] font-semibold text-destructive">
-                          ✕ Cancelled by user
-                        </span>
+                        <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-[10px] font-semibold text-destructive">✕ Cancelled by user</span>
                       )}
-                      {/* Current status badge (read-only) */}
                       {(o.status === "Out for delivery" || o.status === "Delivered" || o.status === "Ready") && (
                         <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
                           o.status === "Delivered" ? "bg-emerald-600/10 text-emerald-600"
@@ -876,11 +873,8 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
                           {o.status === "Ready" ? "⏳ Awaiting agent" : o.status}
                         </span>
                       )}
-                      {/* Current stage label for Placed/Preparing */}
                       {(o.status === "Placed" || o.status === "Preparing") && (
-                        <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground font-medium">
-                          {o.status}
-                        </span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground font-medium">{o.status}</span>
                       )}
                       <button onClick={() => setViewOrder(o)}
                         className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-accent transition">
@@ -892,13 +886,16 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
               </div>
             )}
           </div>
+        </div>
 
+        {/* ── Weekly Revenue (full width below) ── */}
+        <div className="mt-6">
           <WeeklyRevenueChart />
         </div>
 
         {/* ── Manage Menu ── */}
         <div className="mt-8">
-          <div className="rounded-3xl border border-border bg-card p-5">
+          <div className="rounded-3xl border-2 border-black/30 dark:border-white/20 bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-[Fraunces] text-xl font-bold flex items-center gap-2">
                 <ChefHat className="h-5 w-5 text-primary" /> Manage Menu
@@ -967,7 +964,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           <div onClick={() => setViewOrder(null)} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
             <motion.div initial={{ y: 20, opacity: 0, scale: 0.97 }} animate={{ y: 0, opacity: 1, scale: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-elegant">
+              className="w-full max-w-sm rounded-3xl border-2 border-black/30 dark:border-white/20 bg-card p-6 shadow-elegant">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-[Fraunces] text-xl font-bold">Order Details</h3>
                 <button onClick={() => setViewOrder(null)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent transition">
@@ -1037,7 +1034,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
           <div onClick={() => setEditing(null)} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
             <motion.div initial={{ y: 20, opacity: 0, scale: 0.97 }} animate={{ y: 0, opacity: 1, scale: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-elegant">
+              className="w-full max-w-md rounded-3xl border-2 border-black/30 dark:border-white/20 bg-card p-6 shadow-elegant">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-[Fraunces] text-2xl font-bold">{editing.id === "new" ? "Add" : "Edit"} Item</h3>
                 <button onClick={() => setEditing(null)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent transition">

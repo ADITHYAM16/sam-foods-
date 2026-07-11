@@ -96,14 +96,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preload", as: "image", href: "/food/pongal.jpeg" },
       { rel: "preload", as: "image", href: "/food/full meal.jpeg" },
       { rel: "icon", type: "image/jpeg", href: "/logo.png.jpeg" },
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
-        rel: "stylesheet",
+        rel: "preload",
+        as: "style",
         href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap",
       },
     ],
@@ -119,6 +117,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Non-blocking font load */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+          media="print"
+          onLoad={(e) => { (e.currentTarget as HTMLLinkElement).media = 'all'; }}
+        />
         {/* Inline script: apply theme BEFORE paint to prevent flash */}
         <script dangerouslySetInnerHTML={{ __html: `
 (function(){
@@ -294,7 +299,7 @@ function LocationPermissionModal() {
   const handleAllow = async () => {
     setDenied(false);
     const result = await fetchGPS();
-    if (result) {
+    if (result && result !== "denied") {
       sessionStorage.setItem(LOC_ASKED_KEY, "1");
       setShow(false);
     } else {
@@ -326,7 +331,7 @@ function LocationPermissionModal() {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <h2 className="font-[Fraunces] text-xl font-black">Enable Location</h2>
+        <p className="font-[Fraunces] text-xl font-black">Enable Location</p>
         <p className="mt-2 text-sm text-muted-foreground">
           Allow SAM Foods to access your location so we can auto-fill your delivery address and check if you're within our delivery area.
         </p>

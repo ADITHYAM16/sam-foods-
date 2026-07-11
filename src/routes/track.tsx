@@ -4,6 +4,8 @@ import { Bike, CheckCircle2, ChefHat, Package, PackageCheck, Phone, Loader2, XCi
 import { motion } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
+
+const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "+91 63798 07060";
 import { useMyOrders, cancelOrder } from "@/lib/orders-store";
 import { useAuth } from "@/lib/auth-context";
 import type { OrderStatus } from "@/lib/orders-store";
@@ -255,7 +257,7 @@ function TrackPage() {
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <a href="tel:+919876543210" className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-accent">
+              <a href={`tel:${CONTACT_PHONE.replace(/\s/g, "")}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-accent">
                 <Phone className="h-4 w-4" /> Call SAM Foods
               </a>
 

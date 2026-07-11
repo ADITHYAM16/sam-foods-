@@ -68,6 +68,9 @@ function HeroSection() {
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             src="https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=900&q=80"
             alt="SAM signature biryani"
+            width={900}
+            height={900}
+            fetchPriority="high"
             className="aspect-square w-full rounded-[2rem] object-cover shadow-elegant"
           />
         </motion.div>
@@ -194,7 +197,7 @@ function Index() {
             </span>
             <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm">
               <Filter className="h-4 w-4" />
-              <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="bg-transparent outline-none">
+              <select aria-label="Sort dishes" value={sort} onChange={e => setSort(e.target.value as Sort)} className="bg-transparent outline-none">
                 <option value="popular">{t("Popular")}</option>
                 <option value="rating">{t("Top rated")}</option>
                 <option value="price-low">{t("Price: Low to High")}</option>

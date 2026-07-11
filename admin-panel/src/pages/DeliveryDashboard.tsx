@@ -232,7 +232,7 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
         <div className="mb-10 grid gap-4 sm:grid-cols-3">
           {stats.map((s, i) => (
             <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              className="rounded-2xl border-2 border-black/30 dark:border-white/20 bg-card p-5 shadow-sm">
               <div className={`grid h-10 w-10 place-items-center rounded-xl ${s.bg}`}>
                 <s.icon className={`h-5 w-5 ${s.color}`} />
               </div>
@@ -307,7 +307,7 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
               <AnimatePresence>
                 {activeOrders.map((o, i) => (
                   <motion.div key={o.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ delay: i * 0.04 }}
-                    className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
+                    className="rounded-2xl border-2 border-black/30 dark:border-white/20 bg-primary/5 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -356,7 +356,7 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
               <div className="mt-4 space-y-2">
                 {deliveredOrders.map((o, i) => (
                   <motion.div key={o.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                    className="flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+                    className="flex items-center justify-between rounded-2xl border-2 border-black/30 dark:border-white/20 bg-emerald-500/5 px-4 py-3">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">{o.id}</span>

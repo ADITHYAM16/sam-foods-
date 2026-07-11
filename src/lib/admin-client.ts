@@ -1,10 +1,20 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
-// Single shared service-role client — import this everywhere instead of
-// calling createClient() individually, which was creating multiple
-// GoTrueClient instances and causing the browser warning.
-export const adminClient = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+function makeAdminClient(): SupabaseClient {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const key = (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) as string | undefined;
+
+  if (!url || !key) return supabase;
+
+  try {
+    return createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  } catch {
+    return supabase;
+  }
+}
+
+export const adminClient = makeAdminClient();

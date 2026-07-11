@@ -329,7 +329,7 @@ function Receipt({ order, onClose }: { order: BulkOrderRow; onClose: () => void 
         <tr class="total-row"><td>Amount Paid</td><td>₹${order.quoted_amount?.toLocaleString()}</td></tr>
       </table>
       <div class="footer">
-        Thank you for choosing SAM Foods Catering! · +91 98765 43210<br/>
+        Thank you for choosing SAM Foods Catering! · ${CONTACT_PHONE}<br/>
         This is a computer-generated receipt. No signature required.
       </div>
       </body></html>
@@ -409,6 +409,7 @@ function Receipt({ order, onClose }: { order: BulkOrderRow; onClose: () => void 
 
 /* ── Payment Page ─────────────────────────────────────────── */
 const OWNER_UPI = import.meta.env.VITE_OWNER_UPI_ID || "samfoods@upi";
+const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "+91 63798 07060";
 
 function PaymentPage({ order, onPaid, onCancel }: { order: BulkOrderRow; onPaid: (updated: BulkOrderRow) => void; onCancel: () => void }) {
   const [step, setStep] = useState<"pay" | "confirm">("pay");
@@ -705,10 +706,16 @@ function BulkOrderPage() {
     navigator.geolocation.getCurrentPosition(
       async ({ coords: { latitude: lat, longitude: lng } }) => {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+          const ctrl = new AbortController();
+          setTimeout(() => ctrl.abort(), 5000);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+            { signal: ctrl.signal }
+          );
           const json = await res.json();
           set("location")(json.display_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-        } catch { } finally { setGpsLoading(false); }
+        } catch { set("location")(`${lat.toFixed(5)}, ${lng.toFixed(5)}`); }
+        finally { setGpsLoading(false); }
       },
       () => setGpsLoading(false),
       { enableHighAccuracy: true, timeout: 10000 }
@@ -846,7 +853,7 @@ function BulkOrderPage() {
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 text-sm font-semibold">
                   <Phone className="h-4 w-4 text-primary" />
-                  +91 98765 43210
+                  {CONTACT_PHONE}
                 </div>
                 <button
                   onClick={() => { setStage("form"); }}
@@ -988,7 +995,7 @@ function BulkOrderPage() {
                 ))}
                 <div className="rounded-2xl gradient-primary p-5 text-primary-foreground shadow-elegant">
                   <div className="text-xs uppercase tracking-wider opacity-80">Need it faster?</div>
-                  <div className="font-[Fraunces] text-2xl font-bold">Call +91 98765 43210</div>
+                  <div className="font-[Fraunces] text-2xl font-bold">Call {CONTACT_PHONE}</div>
                   <p className="mt-1 text-sm opacity-90">Our event desk answers 24/7.</p>
                 </div>
               </aside>

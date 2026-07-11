@@ -15,10 +15,10 @@ import { playBeep } from "@/lib/beep";
 import { AdminShell } from "@/components/AdminShell";
 import { Footer } from "@/components/site/Footer";
 
-export const Route = createFileRoute("/delivery")(({
+export const Route = createFileRoute("/delivery")({
   component: DeliveryPage,
   head: () => ({ meta: [{ title: "Delivery Partner — SAM Foods" }] }),
-}));
+});
 
 async function fetchCommissionRate(): Promise<number> {
   try {
@@ -141,7 +141,7 @@ function DeliveryPage() {
           );
         })}
       </div>
-      <section className="mx-auto max-w-5xl px-4 pb-20 pt-10 md:px-6 md:pb-10">
+      <section className="mx-auto max-w-5xl px-4 pb-28 pt-10 md:px-6 md:pb-10">
 
         {/* Incoming request alert - visible on all tabs */}
         <AnimatePresence>

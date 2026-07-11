@@ -1,9 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 
-// SAM Foods restaurant location — Namakkal area
-// TODO: Replace with exact restaurant GPS coords from Google Maps
-export const SAM_FOODS_LAT = 11.3500;
-export const SAM_FOODS_LNG = 78.1670;
+// SAM Foods restaurant location
+export const SAM_FOODS_LAT = 11.493224695658704;
+export const SAM_FOODS_LNG = 78.0277320242341;
 export const DELIVERY_RADIUS_KM = 10;
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {

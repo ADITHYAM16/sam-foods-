@@ -5,15 +5,9 @@ import {
   MapPin, Phone, Users, X, XCircle, FileText, Clock, Volume2,
   Download, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
 import { AdminShell } from "@/components/AdminShell";
 
-// Service-role client — DB mutations only (bypasses RLS)
-const adminClient = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+import { adminClient } from "@/lib/admin-client";
 
 /* ─── Excel export ──────────────────────────────────────── */
 function exportToExcel(rows: Record<string, any>[], filename: string) {
@@ -304,14 +298,7 @@ export function BulkOrdersPage({ onNavigate }: { onNavigate?: (tab: AdminTab) =>
 
   // realtime — anon key client created inside effect + polling fallback
   useEffect(() => {
-    // Anon key client — service role does NOT receive realtime postgres_changes events
-    const rt = createClient(
-      import.meta.env.VITE_SUPABASE_URL,
-      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
-
-    const ch = rt
+    const ch = adminClient
       .channel("bulk-orders-admin")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "bulk_orders" },
         ({ new: row }) => {
@@ -355,7 +342,7 @@ export function BulkOrdersPage({ onNavigate }: { onNavigate?: (tab: AdminTab) =>
     }, 4000);
 
     return () => {
-      rt.removeChannel(ch);
+      adminClient.removeChannel(ch);
       clearInterval(poll);
     };
   }, []);

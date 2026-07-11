@@ -6,13 +6,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-<<<<<<< HEAD
 export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered" | "Cancelled";
-          export type PaymentMethod = "cod" | "gpay";
-          export type PaymentStatus = "pending" | "paid" | "failed";
-=======
-export type OrderStatus = "Placed" | "Preparing" | "Ready" | "Out for delivery" | "Delivered";
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
+export type PaymentMethod = "cod" | "gpay";
+export type PaymentStatus = "pending" | "paid" | "failed";
 export type UserRole = "customer" | "admin" | "delivery";
 
 export type Database = {
@@ -53,6 +49,8 @@ export type Database = {
           customer: string
           email: string | null
           room: string
+          delivery_lat: number | null
+          delivery_lng: number | null
           delivery_time: string
           items: Json
           subtotal: number
@@ -61,15 +59,12 @@ export type Database = {
           total: number
           discount: number
           status: OrderStatus
-<<<<<<< HEAD
           payment_method: "cod" | "gpay"
           payment_status: "pending" | "paid" | "failed"
           razorpay_order_id: string | null
           razorpay_payment_id: string | null
           cancelled_at: string | null
           delivery_agent_id: string | null
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
           created_at: string
         }
         Insert: {
@@ -78,6 +73,8 @@ export type Database = {
           customer: string
           email?: string | null
           room: string
+          delivery_lat?: number | null
+          delivery_lng?: number | null
           delivery_time: string
           items: Json
           subtotal: number
@@ -86,28 +83,23 @@ export type Database = {
           total: number
           discount?: number
           status?: OrderStatus
-<<<<<<< HEAD
           payment_method?: "cod" | "gpay"
           payment_status?: "pending" | "paid" | "failed"
           razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           cancelled_at?: string | null
           delivery_agent_id?: string | null
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
           created_at?: string
         }
         Update: {
           status?: OrderStatus
-<<<<<<< HEAD
           payment_method?: "cod" | "gpay"
           payment_status?: "pending" | "paid" | "failed"
           razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           cancelled_at?: string | null
           delivery_agent_id?: string | null
-=======
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
+          delivery_time?: string
         }
       }
       bulk_orders: {
@@ -122,6 +114,10 @@ export type Database = {
           menu_request: string | null
           budget: string
           status: string
+          quoted_amount: number | null
+          payment_status: string
+          payment_ref: string | null
+          paid_at: string | null
           created_at: string
         }
         Insert: {
@@ -139,9 +135,12 @@ export type Database = {
         }
         Update: {
           status?: string
+          quoted_amount?: number | null
+          payment_status?: string
+          payment_ref?: string | null
+          paid_at?: string | null
         }
       }
-<<<<<<< HEAD
       delivery_agents: {
         Row: {
           id: string
@@ -166,9 +165,7 @@ export type Database = {
           active?: boolean
         }
       }
-=======
       menu_items: {
->>>>>>> 00a018a6c6bfc2b51ad8c29883f26fc69c76f74b
         Row: {
           id: string
           name: string

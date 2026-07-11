@@ -308,7 +308,7 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
                 {activeOrders.map((o, i) => (
                   <motion.div key={o.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ delay: i * 0.04 }}
                     className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs text-muted-foreground">{o.id}</span>
@@ -329,14 +329,23 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
                           Payment: <span className="font-medium">{(o as any).payment_method?.toUpperCase()} · {(o as any).payment_status}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <a href={`https://maps.google.com/?q=Room+${o.room}`} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent">
+                      <div className="flex flex-wrap items-center gap-2 shrink-0 mt-2 sm:mt-0">
+                        <a
+                          href={
+                            o.delivery_lat && o.delivery_lng
+                              ? `https://www.google.com/maps/dir/?api=1&destination=${o.delivery_lat},${o.delivery_lng}`
+                              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.room)}`
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2.5 text-xs font-semibold hover:bg-accent active:scale-95 transition touch-manipulation min-h-[40px]"
+                        >
                           <Navigation className="h-3.5 w-3.5" /> Navigate
                         </a>
                         <button
                           onClick={() => updateOrderStatus(o.id, "Delivered" as OrderStatus)}
-                          className="rounded-full gradient-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-elegant">
+                          className="rounded-full gradient-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-elegant active:scale-95 transition touch-manipulation min-h-[40px]"
+                        >
                           ✓ Mark delivered
                         </button>
                       </div>

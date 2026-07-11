@@ -531,7 +531,7 @@ function CartPage() {
               <button
                 onClick={checkout}
                 disabled={placing || (payMethod === "gpay" && razorpayKeyMissing)}
-                className="flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-[1.02] disabled:opacity-60"
+                className="hidden lg:flex w-full items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition hover:scale-[1.02] disabled:opacity-60"
               >
                 {placing
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> {payMethod === "gpay" ? t("Opening payment…") : t("Placing order…")}</>
@@ -543,6 +543,28 @@ function CartPage() {
           </div>
         )}
       </section>
+
+      {/* ── Mobile sticky checkout bar (hidden on lg) ── */}
+      {items.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-sm lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs text-muted-foreground">{t("Total")}</div>
+              <div className="text-lg font-black">₹{finalTotal}</div>
+            </div>
+            <button
+              onClick={() => checkout()}
+              disabled={placing || (payMethod === "gpay" && razorpayKeyMissing)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-full gradient-primary py-3 font-semibold text-primary-foreground shadow-elegant transition disabled:opacity-60"
+            >
+              {placing
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("Placing order…")}</>
+                : <>{payMethod === "gpay" ? t("Pay with GPay / UPI") : `${t("Place order")} · ₹${finalTotal}`}</>
+              }
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Sign-in required modal ── */}
       <AnimatePresence>

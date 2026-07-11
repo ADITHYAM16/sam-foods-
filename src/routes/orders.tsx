@@ -94,7 +94,7 @@ function OrdersPage() {
 
         {/* Filter tabs */}
         <div className="mt-6 flex flex-wrap gap-2">
-          {(["All", "Placed", "Preparing", "Delivered", "Cancelled"] as const).map(s => (
+          {(["All", "Placed", "Preparing", "Ready", "Out for delivery", "Delivered", "Cancelled"] as const).map(s => (
             <button
               key={s}
               onClick={() => setFilter(s)}

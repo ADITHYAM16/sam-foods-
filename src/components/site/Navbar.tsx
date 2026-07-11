@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { LogOut, Menu, Moon, ShoppingBag, Sun, User as UserIcon, X, Home, UtensilsCrossed, MapPin, Navigation, Trash2, Check, ClipboardList, Settings, Languages } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { useCart } from "@/lib/cart-context";
@@ -40,13 +40,24 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
   const { t } = useLanguage();
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [gpsDone, setGpsDone] = useState(false);
-
   const [gpsErr, setGpsErr] = useState<string | null>(null);
+  const [permDenied, setPermDenied] = useState(false);
+  const pendingCloseRef = useRef(false);
 
   useEffect(() => {
-    if (gpsDone && !gpsLoading) onClose();
-  }, [gpsDone, gpsLoading]);
+    if (pendingCloseRef.current && !gpsLoading) {
+      pendingCloseRef.current = false;
+      onClose();
+    }
+  }, [gpsLoading, onClose]);
+
+  // Check permission state on mount
+  useEffect(() => {
+    navigator.permissions?.query({ name: "geolocation" }).then(p => {
+      setPermDenied(p.state === "denied");
+      p.onchange = () => setPermDenied(p.state === "denied");
+    }).catch(() => {});
+  }, []);
 
   const set = (k: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -63,14 +74,16 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
 
   const handleGPS = async () => {
     setGpsErr(null);
-    setGpsDone(false);
+    setPermDenied(false);
+    pendingCloseRef.current = false;
     const result = await fetchGPS();
     if (result === "denied") {
-      setGpsErr("Location access is blocked. Go to Settings → Site permissions → Location and allow this site.");
+      setPermDenied(true);
     } else if (!result) {
       setGpsErr("Could not get location. Make sure GPS is ON and try again.");
+    } else {
+      pendingCloseRef.current = true;
     }
-    setGpsDone(true);
   };
 
   return (
@@ -105,6 +118,20 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
             <Navigation className="h-4 w-4 shrink-0" />
             {gpsLoading ? t("Fetching your location…") : t("Use my location")}
           </button>
+          {permDenied && (
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-3 text-xs">
+              <p className="font-semibold text-amber-700 dark:text-amber-400 mb-2">📍 Location permission is blocked</p>
+              <p className="text-amber-700/80 dark:text-amber-400/80 mb-2.5">To use your location, enable it in your browser settings:</p>
+              <p className="text-amber-700/80 dark:text-amber-400/80 mb-2.5"><strong>Chrome/Android:</strong> Tap the 🔒 lock icon in the address bar → Permissions → Location → Allow</p>
+              <p className="text-amber-700/80 dark:text-amber-400/80 mb-2.5"><strong>Safari/iOS:</strong> Settings → Safari → Location → Allow</p>
+              <button
+                onClick={() => { window.location.reload(); }}
+                className="mt-1 w-full rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white hover:bg-amber-600 transition"
+              >
+                I've enabled it — Reload & try again
+              </button>
+            </div>
+          )}
           {gpsErr && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{gpsErr}</p>}
 
           {/* Saved addresses */}
@@ -364,7 +391,7 @@ export function Navbar() {
 
                 {/* Delivery Location */}
                 <button
-                  onClick={() => setLocOpen(true)}
+                  onClick={() => { setMobileOpen(false); setTimeout(() => setLocOpen(true), 150); }}
                   className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold hover:bg-accent transition text-left"
                 >
                   <MapPin className="h-4 w-4 shrink-0 text-primary" />
