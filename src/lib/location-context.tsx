@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 
-export const SAM_FOODS_LAT = 11.494775161299012;
-export const SAM_FOODS_LNG = 78.02874317260576;
+// SAM Foods restaurant location — Namakkal area
+// TODO: Replace with exact restaurant GPS coords from Google Maps
+export const SAM_FOODS_LAT = 11.3500;
+export const SAM_FOODS_LNG = 78.1670;
 export const DELIVERY_RADIUS_KM = 10;
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -29,6 +31,8 @@ export interface SavedAddress {
   is_default: boolean;
 }
 
+export type FetchGPSResult = { address: string; lat: number; lng: number } | "denied" | null;
+
 interface LocationContextValue {
   active: SavedAddress | null;
   saved: SavedAddress[];
@@ -36,7 +40,7 @@ interface LocationContextValue {
   saveAddress: (label: string, address: string, lat?: number, lng?: number) => Promise<void>;
   setDefault: (id: string) => Promise<void>;
   deleteAddress: (id: string) => Promise<void>;
-  fetchGPS: () => Promise<{ address: string; lat: number; lng: number } | null>;
+  fetchGPS: () => Promise<FetchGPSResult>;
 }
 
 const LocationContext = createContext<LocationContextValue | null>(null);
@@ -91,7 +95,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     await (supabase.from("saved_addresses") as any).delete().eq("id", id);
   };
 
-  const fetchGPS = useCallback((): Promise<{ address: string; lat: number; lng: number } | null> => {
+  const fetchGPS = useCallback((): Promise<FetchGPSResult> => {
     if (!navigator.geolocation) return Promise.resolve(null);
     setGpsLoading(true);
     return new Promise((resolve) => {
@@ -102,9 +106,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
             try {
               const ctrl = new AbortController();
-              setTimeout(() => ctrl.abort(), 2500);
+              setTimeout(() => ctrl.abort(), 5000);
               const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`,
                 { signal: ctrl.signal }
               );
               const json = await res.json();
@@ -114,7 +118,6 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             if (user) {
               const existing = saved.find((a) => a.label === "Current Location");
               if (existing) {
-                // Optimistic update
                 setSaved((prev) => prev.map((a) => a.id === existing.id ? { ...a, address, lat, lng } : a));
                 (supabase.from("saved_addresses") as any)
                   .update({ address, lat, lng }).eq("id", existing.id);
@@ -126,14 +129,17 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             resolve({ address, lat, lng });
           },
           (err) => {
-            if (highAccuracy) {
-              tryGet(false);
+            if (err.code === 1) { // PERMISSION_DENIED
+              setGpsLoading(false);
+              resolve("denied");
+            } else if (highAccuracy) {
+              tryGet(false); // retry with low accuracy on timeout/unavailable
             } else {
               setGpsLoading(false);
               resolve(null);
             }
           },
-          { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 5000 : 3000, maximumAge: 60000 }
+          { enableHighAccuracy: highAccuracy, timeout: highAccuracy ? 10000 : 6000, maximumAge: 0 }
         );
       };
       tryGet(true);

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { useCart } from "@/lib/cart-context";
-import { useLocation, type SavedAddress } from "@/lib/location-context";
+import { useLocation, type SavedAddress, type FetchGPSResult } from "@/lib/location-context";
 import { useLanguage } from "@/lib/lang-context";
 import type { User } from "@/lib/auth-context";
 
@@ -30,7 +30,7 @@ const EMPTY_FORM = { flatNo: "", streetNo: "", streetName: "", area: "", landmar
 function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDefault, deleteAddress, user }: {
   onClose: () => void;
   saveAddress: (label: string, address: string) => Promise<void>;
-  fetchGPS: () => Promise<{ address: string; lat: number; lng: number } | null>;
+  fetchGPS: () => Promise<FetchGPSResult>;
   gpsLoading: boolean;
   saved: SavedAddress[];
   setDefault: (id: string) => Promise<void>;
@@ -41,6 +41,8 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [gpsDone, setGpsDone] = useState(false);
+
+  const [gpsErr, setGpsErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (gpsDone && !gpsLoading) onClose();
@@ -57,6 +59,18 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
     await saveAddress(label || "Home", parts.join(", "));
     setSaving(false);
     setForm(EMPTY_FORM);
+  };
+
+  const handleGPS = async () => {
+    setGpsErr(null);
+    setGpsDone(false);
+    const result = await fetchGPS();
+    if (result === "denied") {
+      setGpsErr("Location access is blocked. Go to Settings → Site permissions → Location and allow this site.");
+    } else if (!result) {
+      setGpsErr("Could not get location. Make sure GPS is ON and try again.");
+    }
+    setGpsDone(true);
   };
 
   return (
@@ -84,13 +98,14 @@ function AddressModal({ onClose, saveAddress, fetchGPS, gpsLoading, saved, setDe
         <div className="max-h-[70vh] overflow-y-auto p-5 space-y-5">
           {/* GPS */}
           <button
-            onClick={async () => { setGpsDone(false); await fetchGPS(); setGpsDone(true); }}
+            onClick={handleGPS}
             disabled={gpsLoading}
             className="flex w-full items-center gap-3 rounded-2xl bg-primary/10 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-60"
           >
             <Navigation className="h-4 w-4 shrink-0" />
             {gpsLoading ? t("Fetching your location…") : t("Use my location")}
           </button>
+          {gpsErr && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{gpsErr}</p>}
 
           {/* Saved addresses */}
           {saved.length > 0 && (

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
-import { useLocation, isWithinDeliveryRadius } from "@/lib/location-context";
+import { useLocation, isWithinDeliveryRadius, type FetchGPSResult } from "@/lib/location-context";
 import { submitOrderRequest } from "@/lib/orders-store";
 import { refetchMenu } from "@/lib/menu-hook";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,28 +161,26 @@ function CartPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
 
-  const triggerGPS = async () => {
-    setGpsErr(null);
-    // Ask browser for permission — if denied, show turn-on instruction
-    if (navigator.permissions) {
-      const perm = await navigator.permissions.query({ name: "geolocation" });
-      if (perm.state === "denied") {
-        setGpsErr("GPS is blocked. On your phone go to Settings → Site permissions → Location and allow this site.");
-        return;
-      }
-    }
-    const result = await fetchGPS();
-    if (result) {
+  const handleGPSResult = (result: FetchGPSResult, opts?: { setAddress?: boolean }) => {
+    if (result === "denied") {
+      setGpsErr("Location access is blocked. Go to your browser/phone Settings → Site permissions → Location and allow this site, then try again.");
+    } else if (result) {
       setGpsCoords({ lat: result.lat, lng: result.lng });
-      // Keep manual text as human-readable address but attach GPS coords
-      if (!gpsAddress) {
+      if (opts?.setAddress || !gpsAddress) {
         setGpsAddress(result.address);
         if (!selectedAddress) setSelectedAddress(result.address);
       }
       setShowGpsPrompt(false);
+      setGpsErr(null);
     } else {
       setGpsErr("Could not get location. Make sure GPS / Location is turned ON in your phone settings, then try again.");
     }
+  };
+
+  const triggerGPS = async () => {
+    setGpsErr(null);
+    const result = await fetchGPS();
+    handleGPSResult(result);
   };
 
 
@@ -204,8 +202,7 @@ function CartPage() {
     }
 
     if (!coords) { setLocationError("unverified"); return; }
-    // TESTING MODE: delivery radius check disabled — re-enable for production
-    // if (!isWithinDeliveryRadius(coords.lat, coords.lng)) { setLocationError("out_of_range"); return; }
+    if (!isWithinDeliveryRadius(coords.lat, coords.lng)) { setLocationError("out_of_range"); return; }
 
     // Cancel any previous watch and start fresh
     resetOrderState();
@@ -401,13 +398,16 @@ function CartPage() {
                       onClick={async () => {
                         setGpsErr(null);
                         const result = await fetchGPS();
-                        if (result) {
+                        if (result === "denied") {
+                          setGpsErr("Location access is blocked. Go to Settings → Site permissions → Location and allow this site.");
+                        } else if (result) {
                           setGpsAddress(result.address);
                           setGpsCoords({ lat: result.lat, lng: result.lng });
                           setSelectedAddress(result.address);
                           setShowManual(false);
+                          setGpsErr(null);
                         } else {
-                          setGpsErr("Could not get your location. Please allow location access and try again.");
+                          setGpsErr("Could not get your location. Make sure GPS is ON and try again.");
                         }
                       }}
                       className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-semibold text-primary hover:bg-accent transition disabled:opacity-60">
@@ -646,13 +646,15 @@ function CartPage() {
                 onClick={async () => {
                   setGpsErr(null);
                   const result = await fetchGPS();
-                  if (result) {
+                  if (result === "denied") {
+                    setGpsErr("Location access is blocked. Go to Settings → Site permissions → Location and allow this site.");
+                  } else if (result) {
                     setGpsAddress(result.address);
                     setGpsCoords({ lat: result.lat, lng: result.lng });
                     setSelectedAddress(result.address);
                     setShowManual(false);
                     setLocationError(null);
-                    // Re-attempt checkout with the newly fetched GPS coords
+                    setGpsErr(null);
                     checkout({ lat: result.lat, lng: result.lng }, result.address);
                   } else {
                     setGpsErr("Could not get location. Please enable GPS in your phone settings and try again.");
