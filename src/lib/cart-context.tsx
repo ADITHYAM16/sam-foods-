@@ -14,7 +14,6 @@ interface CartContextValue {
   count: number;
   subtotal: number;
   delivery: number;
-  gst: number;
   total: number;
 }
 
@@ -55,7 +54,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(() => {
     const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
     const delivery = items.length ? (subtotal > 499 ? 0 : 39) : 0;
-    const gst = Math.round(subtotal * 0.05);
     return {
       items,
       add,
@@ -65,8 +63,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       count: items.reduce((s, i) => s + i.qty, 0),
       subtotal,
       delivery,
-      gst,
-      total: subtotal + delivery + gst,
+      total: subtotal + delivery,
     };
   }, [items]);
 

@@ -91,7 +91,7 @@ interface OrderRequest {
   delivery_time: string;
   subtotal: number;
   delivery_fee: number;
-  gst: number;
+
   discount: number;
   razorpay_order_id: string | null;
   razorpay_payment_id: string | null;
@@ -455,7 +455,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       items: req.items,
       subtotal: req.subtotal,
       delivery_fee: req.delivery_fee,
-      gst: req.gst,
+
       total: req.total,
       discount: req.discount,
       status: "Placed",

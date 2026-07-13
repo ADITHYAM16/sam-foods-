@@ -34,7 +34,7 @@ function loadRazorpay(): Promise<boolean> {
 }
 
 function CartPage() {
-  const { items, setQty, remove, subtotal, delivery, gst, total, clear } = useCart();
+  const { items, setQty, remove, subtotal, delivery, total, clear } = useCart();
   const { user } = useAuth();
   const { saved, active, gpsLoading, fetchGPS, saveAddress } = useLocation();
   const { t } = useLanguage();
@@ -216,7 +216,7 @@ function CartPage() {
       delivery_lat: gpsCoords?.lat ?? null,
       delivery_lng: gpsCoords?.lng ?? null,
       deliveryTime: new Date().toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }),
-      items, subtotal, delivery_fee: delivery, gst,
+      items, subtotal, delivery_fee: delivery,
       total: finalTotal, discount: 0,
       payment_method: payMethod as "cod" | "gpay",
     };
@@ -356,7 +356,7 @@ function CartPage() {
               <div>
                 <Row k={t("Subtotal")} v={`₹${subtotal}`} />
                 <Row k={`${t("Delivery")}${subtotal > 499 ? ` (${t("free above ₹499")})` : ""}`} v={delivery === 0 ? t("FREE") : `₹${delivery}`} />
-                <Row k={t("GST (5%)")} v={`₹${gst}`} />
+
                 <hr className="my-3 border-border" />
                 <div className="flex items-center justify-between text-lg font-bold">
                   <span>{t("Total")}</span><span>₹{finalTotal}</span>

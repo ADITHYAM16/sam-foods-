@@ -17,7 +17,6 @@ export interface Order {
   items: CartItem[];
   subtotal: number;
   delivery_fee: number;
-  gst: number;
   total: number;
   discount: number;
   status: OrderStatus;
@@ -50,7 +49,6 @@ export interface OrderRequest {
   items: CartItem[];
   subtotal: number;
   delivery_fee: number;
-  gst: number;
   total: number;
   discount: number;
   payment_method: "cod" | "gpay";
@@ -73,7 +71,6 @@ export async function submitOrderRequest(o: Parameters<typeof placeOrder>[0]): P
     items: o.items as unknown as any,
     subtotal: o.subtotal,
     delivery_fee: o.delivery_fee,
-    gst: o.gst,
     total: o.total,
     discount: o.discount,
     payment_method: o.payment_method,
@@ -294,7 +291,6 @@ export async function placeOrder(o: {
   items: CartItem[];
   subtotal: number;
   delivery_fee: number;
-  gst: number;
   total: number;
   discount: number;
   payment_method: "cod" | "gpay";
@@ -313,7 +309,6 @@ export async function placeOrder(o: {
       items: o.items as unknown as import("@/integrations/supabase/types").Json,
       subtotal: o.subtotal,
       delivery_fee: o.delivery_fee,
-      gst: o.gst,
       total: o.total,
       discount: o.discount,
       status: "Placed",

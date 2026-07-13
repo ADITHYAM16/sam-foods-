@@ -31,6 +31,44 @@ async function fetchCommissionRate(): Promise<number> {
 
 type DeliveryTab = "requests" | "deliveries" | "history";
 
+function buildMapsUrl(room: string, deliveryLat?: number | null, deliveryLng?: number | null) {
+  const dest = deliveryLat && deliveryLng
+    ? `${deliveryLat},${deliveryLng}`
+    : encodeURIComponent(room);
+  // On iOS use Apple Maps scheme first via comgooglemaps, fallback to universal web URL
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isAndroid = /android/i.test(navigator.userAgent);
+  if (isAndroid) return `google.navigation:q=${dest}`;
+  if (isIOS) return `comgooglemaps://?daddr=${dest}&directionsmode=driving`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+}
+
+function NavigateButton({ order }: { order: { room: string; delivery_lat?: number | null; delivery_lng?: number | null } }) {
+  const handleClick = () => {
+    const mobileUrl = buildMapsUrl(order.room, (order as any).delivery_lat, (order as any).delivery_lng);
+    const webUrl = (order as any).delivery_lat && (order as any).delivery_lng
+      ? `https://www.google.com/maps/dir/?api=1&destination=${(order as any).delivery_lat},${(order as any).delivery_lng}&travelmode=driving`
+      : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.room)}&travelmode=driving`;
+    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+    if (isMobile) {
+      // Try native app first, fall back to web after 1.5s
+      window.location.href = mobileUrl;
+      setTimeout(() => { window.open(webUrl, "_blank"); }, 1500);
+    } else {
+      window.open(webUrl, "_blank");
+    }
+  };
+  return (
+    <button
+      onClick={handleClick}
+      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background py-2 text-xs font-semibold hover:bg-accent transition"
+    >
+      <Navigation className="h-3.5 w-3.5" /> Navigate
+    </button>
+  );
+}
+
+
 function DeliveryPage() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
@@ -362,33 +400,7 @@ function DeliveryPage() {
                     </div>
 
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          // Get delivery address coords from saved_addresses if available
-                          const openNav = (agentLat?: number, agentLng?: number) => {
-                            // Use lat/lng from order if stored, else fall back to address text
-                            const destCoords = (o as any).delivery_lat && (o as any).delivery_lng
-                              ? `${(o as any).delivery_lat},${(o as any).delivery_lng}`
-                              : null;
-                            const destText = encodeURIComponent(o.room);
-                            const origin = agentLat && agentLng ? `${agentLat},${agentLng}` : "";
-                            // Google Maps navigation URL — works on all devices
-                            const url = destCoords
-                              ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destCoords}&travelmode=driving`
-                              : `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destText}&travelmode=driving`;
-                            window.open(url, "_blank");
-                          };
-                          if (!navigator.geolocation) { openNav(); return; }
-                          navigator.geolocation.getCurrentPosition(
-                            ({ coords }) => openNav(coords.latitude, coords.longitude),
-                            () => openNav(),
-                            { enableHighAccuracy: true, timeout: 8000 }
-                          );
-                        }}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background py-2 text-xs font-semibold hover:bg-accent transition"
-                      >
-                        <Navigation className="h-3.5 w-3.5" /> Navigate
-                      </button>
+                      <NavigateButton order={o} />
                       {o.status === "Ready" && (
                         <button
                           onClick={() => updateOrderStatus(o.id, "Out for delivery" as OrderStatus)}

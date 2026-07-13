@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+﻿import { createContext, useContext, useState, type ReactNode } from "react";
 
 export type Lang = "en" | "ta";
 
@@ -103,7 +103,6 @@ export const TA: Record<string, string> = {
   "Subtotal": "கூட்டுத்தொகை",
   "Delivery": "டெலிவரி",
   "free above ₹499": "₹499-க்கு மேல் இலவசம்",
-  "GST (5%)": "ஜிஎஸ்டி (5%)",
   "Total": "மொத்தம்",
   "FREE": "இலவசம்",
   "Payment method": "பணம் செலுத்தும் முறை",
