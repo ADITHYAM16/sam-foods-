@@ -176,7 +176,7 @@ export function AdminShell({ children, activeTab, onNavigate, onDeliveryTabChang
                 {profileOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-elegant"
+                    className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-elegant z-50"
                   >
                     <div className="px-3 py-2">
                       <div className="text-sm font-semibold">{user.name}</div>

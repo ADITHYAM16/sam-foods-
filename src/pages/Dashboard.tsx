@@ -596,7 +596,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
         )}
 
         {/* ── Stats ── */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s, i) => {
             const isRevCard = s.label === "Today's Revenue";
             return isRevCard ? (

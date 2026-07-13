@@ -229,7 +229,7 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
         </div>
 
         {/* Stats */}
-        <div className="mb-10 grid gap-4 sm:grid-cols-3">
+        <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
           {stats.map((s, i) => (
             <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
               className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -365,11 +365,11 @@ export function DeliveryDashboard({ onNavigate }: { onNavigate?: (tab: AdminTab)
               <div className="mt-4 space-y-2">
                 {deliveredOrders.map((o, i) => (
                   <motion.div key={o.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                    className="flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-                    <div>
+                    className="flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 gap-2">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-muted-foreground">{o.id}</span>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Room {o.room}</span>
+                        <span className="font-mono text-xs text-muted-foreground truncate max-w-[80px]">{o.id}</span>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary shrink-0">Room {o.room}</span>
                       </div>
                       <div className="mt-0.5 text-sm font-semibold">{o.customer} · ₹{o.total}</div>
                       {o.created_at && (

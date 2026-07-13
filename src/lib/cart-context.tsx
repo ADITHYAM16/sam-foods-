@@ -53,7 +53,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CartContextValue>(() => {
     const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-    const delivery = items.length ? (subtotal > 499 ? 0 : 39) : 0;
+    const delivery = items.length ? 10 : 0;
     return {
       items,
       add,
