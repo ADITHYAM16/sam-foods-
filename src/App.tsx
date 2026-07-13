@@ -5,7 +5,7 @@ import { Dashboard } from "@/pages/Dashboard";
 import { DeliveryDashboard } from "@/pages/DeliveryDashboard";
 import { AgentsPage } from "@/pages/AgentsPage";
 import { BulkOrdersPage } from "@/pages/BulkOrdersPage";
-import { adminClient } from "@/lib/admin-client";
+import { supabase } from "@/integrations/supabase/client";
 
 type AdminTab = "dashboard" | "agents" | "bulk-orders";
 
@@ -39,15 +39,15 @@ function AppContent() {
   useEffect(() => {
     if (user?.role !== "admin") return;
     const fetchPending = async () => {
-      const { data } = await (adminClient.from("bulk_orders") as any)
+      const { data } = await (supabase.from("bulk_orders") as any)
         .select("id").eq("status", "Pending");
       setPendingBulk((data as any[])?.length ?? 0);
     };
     fetchPending();
-    const ch = adminClient.channel("bulk-badge")
+    const ch = supabase.channel("bulk-badge")
       .on("postgres_changes", { event: "*", schema: "public", table: "bulk_orders" }, fetchPending)
       .subscribe();
-    return () => { adminClient.removeChannel(ch); };
+    return () => { supabase.removeChannel(ch); };
   }, [user?.role]);
 
   // Still resolving — show nothing (avoids flash to Login then Dashboard)

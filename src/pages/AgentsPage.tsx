@@ -5,7 +5,7 @@ import {
   Plus, Trash2, User, X, TrendingUp, Lock, Eye, Calendar,
   Package, Star,
 } from "lucide-react";
-import { adminClient } from "@/lib/admin-client";
+import { supabase } from "@/integrations/supabase/client";
 import { AdminShell } from "@/components/AdminShell";
 
 interface Agent {
@@ -33,7 +33,7 @@ function useAgents() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await adminClient
+    const { data, error } = await supabase
       .from("delivery_agents")
       .select("id,name,email,phone,active,created_at")
       .eq("active", true)
@@ -45,11 +45,11 @@ function useAgents() {
 
   useEffect(() => {
     load();
-    const channel = adminClient
+    const channel = supabase
       .channel("delivery-agents-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "delivery_agents" }, load)
       .subscribe();
-    return () => { adminClient.removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); };
   }, [load]);
 
   return { agents, loading, reload: load };
@@ -59,7 +59,7 @@ async function fetchAgentStats(agentId: string): Promise<AgentStats> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { data } = await (adminClient.from("orders") as any)
+  const { data } = await (supabase.from("orders") as any)
     .select("id,customer,room,total,items,created_at")
     .eq("delivery_agent_id", agentId)
     .eq("status", "Delivered")
@@ -326,7 +326,7 @@ export function AgentsPage({ onNavigate }: { onNavigate?: (tab: AdminTab) => voi
 
     setSaving(true);
     try {
-      const { data: signUpData, error: signUpError } = await adminClient.auth.admin.createUser({
+      const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
         email: form.email.trim(),
         password: form.password,
         email_confirm: true,
@@ -337,7 +337,7 @@ export function AgentsPage({ onNavigate }: { onNavigate?: (tab: AdminTab) => voi
 
       const uid = signUpData.user.id;
 
-      const { error: agentError } = await adminClient.from("delivery_agents").insert({
+      const { error: agentError } = await supabase.from("delivery_agents").insert({
         id: uid,
         name: form.name.trim(),
         email: form.email.trim(),
@@ -346,7 +346,7 @@ export function AgentsPage({ onNavigate }: { onNavigate?: (tab: AdminTab) => voi
       });
       if (agentError) throw new Error(agentError.message);
 
-      await adminClient.from("profiles").upsert({
+      await supabase.from("profiles").upsert({
         id: uid,
         name: form.name.trim(),
         email: form.email.trim(),
@@ -365,8 +365,8 @@ export function AgentsPage({ onNavigate }: { onNavigate?: (tab: AdminTab) => voi
   }
 
   async function deleteAgent(id: string) {
-    await adminClient.from("delivery_agents").update({ active: false }).eq("id", id);
-    await adminClient.from("profiles").update({ role: "customer" }).eq("id", id);
+    await supabase.from("delivery_agents").update({ active: false }).eq("id", id);
+    await supabase.from("profiles").update({ role: "customer" }).eq("id", id);
     reload();
   }
 
