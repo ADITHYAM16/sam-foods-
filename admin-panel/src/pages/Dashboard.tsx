@@ -9,8 +9,7 @@ import {
 import { AdminShell } from "@/components/AdminShell";
 import { type FoodItem } from "@/lib/menu-data";
 import { useOrders, updateOrderStatus, type OrderStatus, assignNearestAgent } from "@/lib/orders-store";
-import { supabase } from "@/integrations/supabase/client";
-import { adminClient } from "@/lib/admin-client";
+import { adminClient as supabase } from "@/lib/admin-client";
 
 /* ─── Excel export helper ─────────────────────────────────── */
 function exportToExcel(rows: Record<string, any>[], filename: string) {
@@ -41,7 +40,7 @@ function useRevenueStats() {
     const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 6); weekStart.setHours(0,0,0,0);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const { data } = await (adminClient.from("orders") as any)
+    const { data } = await (supabase.from("orders") as any)
       .select("id,customer,room,total,items,created_at,payment_method,status")
       .neq("status", "Cancelled")
       .gte("created_at", monthStart.toISOString())
@@ -68,11 +67,11 @@ function useRevenueStats() {
 
   // Realtime order updates
   useEffect(() => {
-    const ch = adminClient.channel("revenue-realtime")
+    const ch = supabase.channel("revenue-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, load)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, load)
       .subscribe();
-    return () => { adminClient.removeChannel(ch); };
+    return () => { supabase.removeChannel(ch); };
   }, [load]);
 
   return { todayRev, weekRev, monthRev, todayOrders, weekOrders, monthOrders, reload: load };
@@ -171,7 +170,7 @@ function useWeeklyRevenue() {
       const since = new Date();
       since.setDate(since.getDate() - 6);
       since.setHours(0, 0, 0, 0);
-      const { data } = await (adminClient.from("orders") as any)
+      const { data } = await (supabase.from("orders") as any)
         .select("total,created_at").gte("created_at", since.toISOString()).neq("status", "Cancelled");
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const buckets: Record<string, number> = {};
@@ -277,7 +276,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   }
 
   async function markGPayPaid(orderId: string) {
-    await (adminClient.from("orders") as any)
+    await (supabase.from("orders") as any)
       .update({ payment_status: "paid" })
       .eq("id", orderId);
   }
@@ -358,14 +357,14 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
     loadMenu();
 
     // Load pending order requests once
-    adminClient.from("order_requests" as any).select("*")
+    supabase.from("order_requests" as any).select("*")
       .eq("status", "pending").order("created_at", { ascending: true })
       .then(({ data }) => {
         if (data) setRequests((data as any[]).map(r => ({ ...r, items: r.items as { name: string; qty: number }[] })));
       });
 
     // Load pending/accepted bulk orders once
-    adminClient.from("bulk_orders" as any).select("id,name,people,date,status")
+    supabase.from("bulk_orders" as any).select("id,name,people,date,status")
       .in("status", ["Pending", "Accepted"]).order("created_at", { ascending: false }).limit(10)
       .then(({ data }) => { if (data) setBulkOrders(data as any); });
 
@@ -375,7 +374,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       .subscribe();
 
     // ── order_requests realtime — IN-PLACE patch, never full reload ──
-    const reqCh = adminClient.channel("adm-order-req")
+    const reqCh = supabase.channel("adm-order-req")
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "order_requests" },
         ({ new: row }) => {
@@ -409,7 +408,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
       .subscribe();
 
     // ── bulk_orders realtime — IN-PLACE patch ──
-    const bulkCh = adminClient.channel("adm-bulk")
+    const bulkCh = supabase.channel("adm-bulk")
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "bulk_orders" },
         ({ new: row }) => {
@@ -441,13 +440,13 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
 
     return () => {
       supabase.removeChannel(menuCh);
-      adminClient.removeChannel(reqCh);
-      adminClient.removeChannel(bulkCh);
+      supabase.removeChannel(reqCh);
+      supabase.removeChannel(bulkCh);
     };
   }, [loadMenu]);
 
   async function acceptRequest(req: OrderRequest) {
-    const { data: orderData, error } = await (adminClient.from("orders") as any).insert({
+    const { data: orderData, error } = await (supabase.from("orders") as any).insert({
       user_id: req.user_id,
       customer: req.customer,
       email: req.email,
@@ -470,7 +469,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
 
     // Delivery request is sent when admin clicks Ready (not here)
     // Mark request accepted with order_id so user gets redirected to track page
-    await (adminClient.from("order_requests") as any)
+    await (supabase.from("order_requests") as any)
       .update({ status: "accepted", order_id: (orderData as any).id })
       .eq("id", req.id);
 
@@ -478,7 +477,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   }
 
   async function denyRequest(id: string) {
-    await (adminClient.from("order_requests") as any)
+    await (supabase.from("order_requests") as any)
       .update({ status: "denied" }).eq("id", id);
     setRequests(p => p.filter(r => r.id !== id));
   }
@@ -487,7 +486,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
     const next = !current;
     // Optimistic update — flip instantly in UI
     setItems(prev => prev.map(it => it.id === id ? { ...it, sold_out: next } : it));
-    await (adminClient.from("menu_items") as any).update({ sold_out: next }).eq("id", id);
+    await (supabase.from("menu_items") as any).update({ sold_out: next }).eq("id", id);
   }
 
   async function saveItem() {
@@ -540,7 +539,7 @@ export function Dashboard({ onNavigate, pendingBulk = 0 }: { onNavigate?: (tab: 
   async function fixAllImages() {
     setFixingImages(true);
     const updates = Object.entries(LOCAL_IMAGES).map(([id, image]) =>
-      (adminClient.from("menu_items") as any).update({ image }).eq("id", id)
+      (supabase.from("menu_items") as any).update({ image }).eq("id", id)
     );
     await Promise.all(updates);
     await loadMenu();

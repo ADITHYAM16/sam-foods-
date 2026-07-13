@@ -5,57 +5,53 @@ import { Dashboard } from "@/pages/Dashboard";
 import { DeliveryDashboard } from "@/pages/DeliveryDashboard";
 import { AgentsPage } from "@/pages/AgentsPage";
 import { BulkOrdersPage } from "@/pages/BulkOrdersPage";
-import { adminClient } from "@/lib/admin-client";
+import { adminClient as supabase } from "@/lib/admin-client";
 
 type AdminTab = "dashboard" | "agents" | "bulk-orders";
 
-function AppContent() {
+// Derive page from URL path — completely independent of shared localStorage session
+function getPage(): "admin" | "delivery" {
+  return window.location.pathname.startsWith("/delivery") ? "delivery" : "admin";
+}
+
+function AdminApp() {
   const { user, loading } = useAuth();
   const [adminTab, setAdminTab] = useState<AdminTab>("dashboard");
   const [pendingBulk, setPendingBulk] = useState(0);
-
-  const titleSet = useRef(false);
   const roleRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user || titleSet.current) return;
-    titleSet.current = true;
+    if (!user) return;
     roleRef.current = user.role;
-    document.title = user.role === "delivery"
-      ? "Delivery Agent — SAM Foods"
-      : "Admin Dashboard — SAM Foods";
-  }, [user]);
-
-  useEffect(() => {
-    if (roleRef.current !== "admin") return;
     const titles: Record<AdminTab, string> = {
-      "dashboard": "Admin Dashboard — SAM Foods",
-      "agents": "Delivery Agents — SAM Foods",
+      dashboard: "Admin Dashboard — SAM Foods",
+      agents: "Delivery Agents — SAM Foods",
       "bulk-orders": "Bulk Orders — SAM Foods",
     };
     document.title = titles[adminTab];
-  }, [adminTab]);
+  }, [user, adminTab]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
     const fetchPending = async () => {
-      const { data } = await (adminClient.from("bulk_orders") as any)
+      const { data } = await (supabase.from("bulk_orders") as any)
         .select("id").eq("status", "Pending");
       setPendingBulk((data as any[])?.length ?? 0);
     };
     fetchPending();
-    const ch = adminClient.channel("bulk-badge")
+    const ch = supabase.channel("bulk-badge")
       .on("postgres_changes", { event: "*", schema: "public", table: "bulk_orders" }, fetchPending)
       .subscribe();
-    return () => { adminClient.removeChannel(ch); };
+    return () => { supabase.removeChannel(ch); };
   }, [user?.role]);
 
-  // Still resolving — show nothing (avoids flash to Login then Dashboard)
   if (loading) return null;
-
-  if (!user) return <Login />;
-
-  if (user.role === "delivery") return <DeliveryDashboard />;
+  if (!user) return <Login forPage="admin" />;
+  // If a delivery agent somehow lands on /admin, redirect them
+  if (user.role === "delivery") {
+    window.location.href = "/delivery";
+    return null;
+  }
 
   return (
     <>
@@ -72,6 +68,25 @@ function AppContent() {
   );
 }
 
+function DeliveryApp() {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    document.title = "Delivery Agent — SAM Foods";
+  }, []);
+
+  if (loading) return null;
+  if (!user) return <Login forPage="delivery" />;
+  // If admin somehow lands on /delivery, redirect them
+  if (user.role === "admin") {
+    window.location.href = "/";
+    return null;
+  }
+
+  return <DeliveryDashboard />;
+}
+
 export default function App() {
-  return <AppContent />;
+  const page = getPage();
+  return page === "delivery" ? <DeliveryApp /> : <AdminApp />;
 }

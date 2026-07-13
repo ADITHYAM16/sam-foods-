@@ -46,7 +46,10 @@ function HeroSection() {
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-primary" /> {t("Hotel-quality. Delivered in 30 min.")}
           </motion.div>
-          <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-5 text-4xl font-black leading-[1.05] md:text-7xl">
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }} className="mt-4 text-2xl font-black tracking-tight text-gradient md:text-4xl">
+            Sri Annapoorani Mess
+          </motion.div>
+          <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mt-2 text-4xl font-black leading-[1.05] md:text-7xl">
             {t("Crave it.")} <br />
             <span className="text-gradient">{t("Tap it.")}</span> {t("Devour it.")}
           </motion.h1>

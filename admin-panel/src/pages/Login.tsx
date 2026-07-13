@@ -5,11 +5,11 @@ import { useAuth } from "@/lib/auth-context";
 
 type OwnerRole = "admin" | "delivery";
 
-export function Login() {
+export function Login({ forPage }: { forPage: "admin" | "delivery" }) {
   const { login } = useAuth();
-  const [role, setRole] = useState<OwnerRole>("admin");
-  const [email, setEmail] = useState("sam@gmail.com");
-  const [password, setPassword] = useState("admin@123");
+  const [role, setRole] = useState<OwnerRole>(forPage === "delivery" ? "delivery" : "admin");
+  const [email, setEmail] = useState(forPage === "admin" ? "sam@gmail.com" : "");
+  const [password, setPassword] = useState(forPage === "admin" ? "admin@123" : "");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -25,7 +25,10 @@ export function Login() {
       if (u.role !== role) {
         setErr(`This account is not a ${role === "admin" ? "Admin" : "Delivery Agent"} account.`);
         setBusy(false);
+        return;
       }
+      // Navigate to the correct page for this role
+      window.location.href = u.role === "delivery" ? "/delivery" : "/";
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Sign in failed.";
       setErr(msg.includes("Invalid login") ? "Invalid email or password." : msg);

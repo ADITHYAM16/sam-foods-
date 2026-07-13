@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { SiteShell } from "@/components/site/SiteShell";
 import { supabase } from "@/integrations/supabase/client";
 
-const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "+91 63798 07060";
+const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "+91 84382 78584";
 import { useMyOrders, cancelOrder } from "@/lib/orders-store";
 import { useAuth } from "@/lib/auth-context";
 import type { OrderStatus } from "@/lib/orders-store";

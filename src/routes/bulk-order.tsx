@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   CalendarDays, CheckCircle2, Loader2, MapPin, Navigation,
   PartyPopper, Phone, User, Users, UtensilsCrossed,
-  IndianRupee, Clock, Printer, X, Star, ChevronRight, History,
+  IndianRupee, Clock, Printer, X, Star, ChevronRight, ChevronDown, History,
 } from "lucide-react";
 import { useMenu } from "@/lib/menu-hook";
 import { CATEGORIES } from "@/lib/menu-data";
@@ -408,147 +408,175 @@ function Receipt({ order, onClose }: { order: BulkOrderRow; onClose: () => void 
 }
 
 /* ── Payment Page ─────────────────────────────────────────── */
-const OWNER_UPI = import.meta.env.VITE_OWNER_UPI_ID || "samfoods@upi";
-const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "+91 63798 07060";
+const CONTACT_PHONE = import.meta.env.VITE_CONTACT_PHONE || "+91 84382 78584";
+
+// Open Mon–Sat 7:00 AM – 4:00 PM IST
+function isRestaurantOpen(): boolean {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const day = now.getDay();
+  if (day === 0) return false;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return mins >= 7 * 60 && mins < 16 * 60;
+}
 
 function PaymentPage({ order, onPaid, onCancel }: { order: BulkOrderRow; onPaid: (updated: BulkOrderRow) => void; onCancel: () => void }) {
-  const [step, setStep] = useState<"pay" | "confirm">("pay");
+  const TIMER_SECS = 5 * 60;
+  const [timeLeft, setTimeLeft] = useState(TIMER_SECS);
+  const [expired, setExpired] = useState(false);
+  const [showPaidDropdown, setShowPaidDropdown] = useState(false);
+  const [screenshot, setScreenshot] = useState<string | null>(null);
   const [txnId, setTxnId] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
   const amount = order.quoted_amount ?? 0;
-  const note = encodeURIComponent(`SAM Foods Catering - ${order.event} - ${order.name}`);
-  const payeeName = encodeURIComponent("SAM Foods");
 
-  // GPay / any UPI app deep link
-  const gpayLink = `tez://upi/pay?pa=${OWNER_UPI}&pn=${payeeName}&am=${amount}&cu=INR&tn=${note}`;
-  // Fallback intent URI that works on all UPI apps including GPay on Android
-  const upiIntent = `upi://pay?pa=${OWNER_UPI}&pn=${payeeName}&am=${amount}&cu=INR&tn=${note}`;
+  useEffect(() => {
+    if (expired) return;
+    const t = setInterval(() => {
+      setTimeLeft(s => {
+        if (s <= 1) { clearInterval(t); setExpired(true); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [expired]);
 
-  function openGPay() {
-    // Try tez:// (GPay) first; fall back to upi:// which Android handles generically
-    const a = document.createElement("a");
-    a.href = gpayLink;
-    a.click();
-    // After ~800ms if nothing opened, try generic upi://
-    setTimeout(() => {
-      const b = document.createElement("a");
-      b.href = upiIntent;
-      b.click();
-    }, 800);
-    // Move to confirm step so user can enter txn ID after paying
-    setTimeout(() => setStep("confirm"), 1200);
-  }
+  const mins = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+  const secs = String(timeLeft % 60).padStart(2, "0");
 
   async function confirmPayment(e: React.FormEvent) {
     e.preventDefault();
-    if (!txnId.trim()) return setErr("Please enter the UPI transaction ID shown in GPay after payment.");
-    setSaving(true);
-    setErr(null);
+    if (!screenshot) return setErr("Please upload your payment screenshot.");
+    setSaving(true); setErr(null);
     const paidAt = new Date().toISOString();
     const { error } = await (supabase.from("bulk_orders") as any)
-      .update({ payment_status: "paid", payment_ref: txnId.trim(), paid_at: paidAt, status: "Confirmed" })
+      .update({ payment_status: "screenshot_uploaded", payment_ref: txnId.trim() || "screenshot", paid_at: paidAt, status: "Pending Confirmation" })
       .eq("id", order.id);
-    if (error) { setErr("Failed to record payment. Please try again."); setSaving(false); return; }
-    onPaid({ ...order, payment_status: "paid", payment_ref: txnId.trim(), paid_at: paidAt, status: "Confirmed" });
+    if (error) { setErr("Failed to submit. Please try again."); setSaving(false); return; }
+    onPaid({ ...order, payment_status: "screenshot_uploaded", payment_ref: txnId.trim() || "screenshot", paid_at: paidAt, status: "Pending Confirmation" });
   }
 
   return (
-    <section className="mx-auto max-w-md px-4 py-16">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl border border-border bg-card p-8 shadow-elegant"
-      >
-        {/* Order summary */}
-        <div className="text-center mb-6">
-          <span className="inline-grid h-16 w-16 place-items-center rounded-full gradient-primary text-primary-foreground shadow-glow mb-3">
-            <IndianRupee className="h-8 w-8" />
-          </span>
-          <h2 className="font-[Fraunces] text-3xl font-black">Complete Payment</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Your bulk order has been accepted!</p>
+    <section className="mx-auto max-w-md px-4 py-10">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+        className="rounded-3xl border border-border bg-card shadow-elegant overflow-hidden">
+
+        {/* Header */}
+        <div className="gradient-primary p-5 text-primary-foreground text-center">
+          <h2 className="font-[Fraunces] text-2xl font-black">Complete Payment</h2>
+          <p className="mt-1 text-sm opacity-80">Scan the QR & pay ₹{amount.toLocaleString()}</p>
         </div>
 
-        <div className="rounded-2xl bg-muted/50 p-4 mb-6 space-y-2">
-          {[
-            ["Customer", order.name],
-            ["Event", `${order.event} · ${order.people} guests`],
-            ["Date", order.date],
-          ].map(([k, v]) => (
-            <div key={k} className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{k}</span>
-              <span className="font-semibold">{v}</span>
-            </div>
-          ))}
-          <div className="flex justify-between items-center pt-2 border-t border-border">
-            <span className="font-bold">Total Amount</span>
-            <span className="text-2xl font-black text-primary">₹{amount.toLocaleString()}</span>
-          </div>
+        {/* Timer bar */}
+        <div className={`flex items-center justify-center gap-2 py-2.5 text-sm font-bold ${
+          expired ? "bg-destructive/10 text-destructive" : timeLeft <= 60 ? "bg-amber-500/10 text-amber-600" : "bg-muted text-muted-foreground"
+        }`}>
+          <Clock className="h-4 w-4" />
+          {expired ? "Payment time expired" : `Pay within ${mins}:${secs}`}
         </div>
 
-        <AnimatePresence mode="wait">
-          {step === "pay" ? (
-            <motion.div key="pay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-              {/* GPay button */}
-              <button
-                onClick={openGPay}
-                className="w-full flex items-center justify-center gap-3 rounded-2xl bg-[#1a73e8] hover:bg-[#1557b0] transition py-4 text-white font-bold text-base shadow-elegant"
-              >
-                <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
-                  <path d="M43.6 20.5H42V20H24v8h11.3C33.7 32.3 29.3 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.2 2.7l5.7-5.7C33.5 7.1 29 5 24 5 12.9 5 4 13.9 4 25s8.9 20 20 20 20-8.9 20-20c0-1.5-.2-2.7-.4-4.5z" fill="#FFC107"/>
-                  <path d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c2.8 0 5.3 1 7.2 2.7l5.7-5.7C33.5 7.1 29 5 24 5c-7.7 0-14.3 4.4-17.7 9.7z" fill="#FF3D00"/>
-                  <path d="M24 45c4.9 0 9.3-1.9 12.7-4.9l-5.9-5c-1.7 1.2-3.9 2-6.8 2-5.3 0-9.7-2.7-11.3-7l-6.5 5c3.3 5.4 9.8 9.9 17.8 9.9z" fill="#4CAF50"/>
-                  <path d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.3 5.5l5.9 5C36.8 36.1 44 30 44 25c0-1.5-.2-2.7-.4-4.5z" fill="#1976D2"/>
-                </svg>
-                Pay ₹{amount.toLocaleString()} via Google Pay
-              </button>
-
-              <button
-                onClick={() => setStep("confirm")}
-                className="w-full rounded-2xl border border-border py-3 text-sm font-semibold text-muted-foreground hover:bg-accent transition"
-              >
-                Already paid? Enter transaction ID →
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-500/30 p-3 mb-4 text-sm text-emerald-700 dark:text-emerald-400">
-                ✓ After paying ₹{amount.toLocaleString()} on Google Pay, enter the <b>Transaction ID</b> (UPI Ref No.) shown in your GPay receipt.
+        <div className="p-5 space-y-4">
+          {/* Order summary */}
+          <div className="rounded-2xl bg-muted/50 p-3 space-y-1.5">
+            {[["Customer", order.name], ["Event", `${order.event} · ${order.people} guests`], ["Date", order.date]].map(([k, v]) => (
+              <div key={k} className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{k}</span>
+                <span className="font-semibold">{v}</span>
               </div>
-              <form onSubmit={confirmPayment} className="space-y-3">
-                <input
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary transition"
-                  placeholder="e.g. 408212345678"
-                  value={txnId}
-                  onChange={(e) => setTxnId(e.target.value)}
-                />
-                {err && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{err}</p>}
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-full gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elegant disabled:opacity-60"
-                >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  {saving ? "Confirming…" : "Confirm Payment & Get Receipt"}
-                </button>
-                <button type="button" onClick={() => setStep("pay")}
-                  className="w-full text-xs text-muted-foreground hover:text-foreground transition">
-                  ← Back
-                </button>
-              </form>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            ))}
+            <div className="flex justify-between items-center pt-2 border-t border-border">
+              <span className="font-bold">Total</span>
+              <span className="text-xl font-black text-primary">₹{amount.toLocaleString()}</span>
+            </div>
+          </div>
 
-        {/* Cancel Payment */}
-        <button
-          type="button"
-          onClick={onCancel}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10 transition"
-        >
-          <X className="h-4 w-4" /> Cancel Payment
-        </button>
+          {/* QR Code */}
+          {!expired && (
+            <div className="flex flex-col items-center gap-2">
+              <img src="/gpay.jpeg" alt="Scan to pay" className="w-60 rounded-2xl border border-border object-contain shadow-sm" />
+              <p className="text-xs text-muted-foreground">Scan with GPay, PhonePe, Paytm or any UPI app</p>
+            </div>
+          )}
+
+          {/* Expired state */}
+          {expired && (
+            <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-center">
+              <p className="text-sm font-semibold text-destructive">Payment window closed.</p>
+              <p className="text-xs text-muted-foreground mt-1">Please contact us to retry.</p>
+              <a href={`tel:${CONTACT_PHONE.replace(/\s/g, "")}`}
+                className="mt-3 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent transition">
+                <Phone className="h-4 w-4 text-primary" /> {CONTACT_PHONE}
+              </a>
+            </div>
+          )}
+
+          {/* I've Paid dropdown */}
+          {!expired && (
+            <div>
+              <button onClick={() => setShowPaidDropdown(v => !v)}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elegant transition">
+                <CheckCircle2 className="h-4 w-4" />
+                I've Paid
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showPaidDropdown ? "rotate-180" : ""}`} />
+              </button>
+
+              <AnimatePresence>
+                {showPaidDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <form onSubmit={confirmPayment} className="mt-3 space-y-3 rounded-2xl border border-border bg-background p-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">UPI Transaction ID (optional)</label>
+                        <input
+                          className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm outline-none focus:border-primary transition"
+                          placeholder="e.g. 408212345678"
+                          value={txnId}
+                          onChange={e => setTxnId(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Upload Payment Screenshot *</label>
+                        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 px-4 py-4 hover:border-primary hover:bg-primary/5 transition">
+                          {screenshot ? (
+                            <img src={screenshot} alt="screenshot" className="h-32 w-full rounded-lg object-contain" />
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                              <IndianRupee className="h-6 w-6" />
+                              <span className="text-xs">Tap to upload screenshot</span>
+                            </div>
+                          )}
+                          <input type="file" accept="image/*" className="hidden"
+                            onChange={e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = ev => setScreenshot(ev.target?.result as string);
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                      </div>
+                      {err && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{err}</p>}
+                      <button type="submit" disabled={saving || !screenshot}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-full gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elegant disabled:opacity-60">
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        {saving ? "Submitting…" : "Confirm & Request Order"}
+                      </button>
+                    </form>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Cancel */}
+          <button type="button" onClick={onCancel}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10 transition">
+            <X className="h-4 w-4" /> Cancel Payment
+          </button>
+        </div>
       </motion.div>
     </section>
   );
@@ -915,8 +943,28 @@ function BulkOrderPage() {
           </motion.div>
         )}
 
+        {/* Closed banner */}
+        {stage === "form" && !isRestaurantOpen() && (
+          <motion.div key="closed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <div className="grid place-items-center py-20 text-center px-4">
+              <div className="max-w-sm">
+                <span className="inline-grid h-20 w-20 place-items-center rounded-full bg-destructive/10 text-destructive mb-4 text-4xl">🔒</span>
+                <h2 className="font-[Fraunces] text-3xl font-bold text-destructive">Restaurant Closed</h2>
+                <p className="mt-3 text-muted-foreground">
+                  Bulk orders can only be placed during opening hours.<br />
+                  <span className="font-semibold text-foreground">Mon – Sat · 7:00 AM – 4:00 PM</span>
+                </p>
+                <a href={`tel:${CONTACT_PHONE.replace(/\s/g, "")}`}
+                  className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 text-sm font-semibold hover:bg-accent transition">
+                  <Phone className="h-4 w-4 text-primary" /> {CONTACT_PHONE}
+                </a>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Form */}
-        {stage === "form" && (
+        {stage === "form" && isRestaurantOpen() && (
           <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <section className="mx-auto grid max-w-7xl gap-8 px-4 pb-16 md:grid-cols-[1fr_360px] md:px-6">
               <motion.form initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} onSubmit={submit}
@@ -996,7 +1044,7 @@ function BulkOrderPage() {
                 <div className="rounded-2xl gradient-primary p-5 text-primary-foreground shadow-elegant">
                   <div className="text-xs uppercase tracking-wider opacity-80">Need it faster?</div>
                   <div className="font-[Fraunces] text-2xl font-bold">Call {CONTACT_PHONE}</div>
-                  <p className="mt-1 text-sm opacity-90">Our event desk answers 24/7.</p>
+                  <p className="mt-1 text-sm opacity-90">Mon – Sat, 7 AM – 4 PM</p>
                 </div>
               </aside>
             </section>

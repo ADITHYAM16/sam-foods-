@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseAuth as supabase } from "@/integrations/supabase/client";
 
 export type Role = "customer" | "admin" | "delivery";
 

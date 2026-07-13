@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import QRCode from "qrcode";
 
 // ── Your UPI ID ───────────────────────────────────────────────────────────────
-const SAM_UPI_ID = "6379807060@okbizaxis";
+const SAM_UPI_ID = import.meta.env.VITE_OWNER_UPI_ID || "8438278584@okbizaxis";
 const SAM_NAME   = "SAM Foods";
 // ─────────────────────────────────────────────────────────────────────────────
 

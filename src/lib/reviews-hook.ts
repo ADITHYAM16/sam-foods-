@@ -38,10 +38,15 @@ export function useReviews() {
   }, [fetch]);
 
   const submitReview = async (userId: string, name: string, role: string, rating: number, text: string) => {
-    const { error } = await (supabase.from("reviews") as any).upsert(
-      { user_id: userId, name, role, rating, text },
-      { onConflict: "user_id" }
-    );
+    // Check if user already has a review
+    const { data: existing } = await (supabase.from("reviews") as any)
+      .select("id").eq("user_id", userId).maybeSingle();
+
+    const payload = { user_id: userId, name, role, rating, text };
+    const { error } = existing
+      ? await (supabase.from("reviews") as any).update(payload).eq("id", existing.id)
+      : await (supabase.from("reviews") as any).insert(payload);
+
     if (error) throw new Error(error.message);
     await fetch();
   };

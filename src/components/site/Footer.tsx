@@ -69,9 +69,8 @@ export function Footer() {
                 {t("HOURS")}
               </h4>
               <div className="space-y-1 text-sm text-muted-foreground">
-                <p>Mon - Fri : 11:00 - 23:00</p>
-                <p>Sat - Sun : 10:00 - 24:00</p>
-                <p className="text-primary font-semibold">Bulk orders : 24/7</p>
+                <p>Mon - Sat : 7:00 AM - 4:00 PM</p>
+                <p className="text-destructive font-semibold">Sun : Closed</p>
               </div>
             </div>
 

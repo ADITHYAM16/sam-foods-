@@ -1,8 +1,12 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 
-// SAM Foods restaurant location
+// SAM Foods restaurant location (origin / pickup)
 export const SAM_FOODS_LAT = 11.493224695658704;
 export const SAM_FOODS_LNG = 78.0277320242341;
+
+// Delivery endpoint — orders only accepted within DELIVERY_RADIUS_KM of this point
+export const DEST_LAT = 11.47194815269051;
+export const DEST_LNG = 77.99851586070365;
 export const DELIVERY_RADIUS_KM = 10;
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -16,7 +20,7 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 }
 
 export function isWithinDeliveryRadius(lat: number, lng: number): boolean {
-  return haversineKm(SAM_FOODS_LAT, SAM_FOODS_LNG, lat, lng) <= DELIVERY_RADIUS_KM;
+  return haversineKm(DEST_LAT, DEST_LNG, lat, lng) <= DELIVERY_RADIUS_KM;
 }
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
